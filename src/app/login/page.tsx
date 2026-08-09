@@ -51,13 +51,13 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="grid min-h-screen place-items-center bg-slate-950 px-6 py-12">
+    <main className="grid min-h-screen place-items-center bg-ink-950 px-6 py-12">
       <div className="w-full max-w-md rounded-3xl border border-white/10 bg-white p-8 shadow-2xl">
         <Link href="/" className="text-sm font-medium text-primary">
           ← Página inicial
         </Link>
         <h1 className="mt-8 text-3xl font-bold tracking-tight">Acesse sua conta</h1>
-        <p className="mt-2 text-sm text-slate-500">
+        <p className="mt-2 text-sm text-ink-500">
           Use o e-mail e a senha fornecidos pelo administrador.
         </p>
 
@@ -69,7 +69,7 @@ export default function LoginPage() {
               type="email"
               autoComplete="email"
               required
-              className="mt-2 w-full rounded-xl border border-slate-300 px-4 py-3 outline-none ring-primary focus:ring-2"
+              className="mt-2 w-full rounded-xl border border-ink-300 px-4 py-3 outline-none ring-primary focus:ring-2"
             />
           </label>
           <label className="block text-sm font-medium">
@@ -80,14 +80,14 @@ export default function LoginPage() {
               minLength={8}
               autoComplete="current-password"
               required
-              className="mt-2 w-full rounded-xl border border-slate-300 px-4 py-3 outline-none ring-primary focus:ring-2"
+              className="mt-2 w-full rounded-xl border border-ink-300 px-4 py-3 outline-none ring-primary focus:ring-2"
             />
           </label>
-          {error && <p className="text-sm text-rose-700">{error}</p>}
+          {error && <p className="text-sm text-danger-700">{error}</p>}
           <button
             type="submit"
             disabled={pending}
-            className="w-full rounded-xl bg-slate-950 px-4 py-3 font-semibold text-white hover:bg-slate-800 disabled:opacity-60"
+            className="w-full rounded-xl bg-ink-950 px-4 py-3 font-semibold text-white hover:bg-ink-800 disabled:opacity-60"
           >
             {pending ? "Entrando..." : "Entrar"}
           </button>

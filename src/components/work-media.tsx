@@ -1,61 +1,532 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import type { LucideIcon } from "lucide-react";
+import {
+  FileAudio,
+  FileImage,
+  FileSpreadsheet,
+  FileText,
+  FileVideo,
+  ImageOff,
+  Images,
+  Paperclip,
+  Pencil,
+  Presentation,
+  Star,
+  Trash2,
+} from "lucide-react";
+import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
+import {
+  Badge,
+  Button,
+  IconButton,
+  Input,
+  Modal,
+  RecordCard,
+  RecordSection,
+  Select,
+  Tabs,
+  Textarea,
+  type TabItem,
+} from "@/components/ui";
 import { apiFetch } from "@/lib/api-client";
-import type { AttachmentType, WorkAttachment, WorkGallery } from "@/types/domain";
+import { errorMessage } from "@/lib/work";
+import type {
+  AttachmentType,
+  WorkAttachment,
+  WorkGallery,
+  WorkImage,
+} from "@/types/domain";
 
-const field = "rounded-lg border border-slate-300 px-3 py-2 text-sm";
-const types: AttachmentType[] = ["IMAGEM", "PDF", "DOCUMENTO", "PLANILHA", "APRESENTACAO", "AUDIO", "VIDEO", "OUTRO"];
+const TYPES: AttachmentType[] = [
+  "IMAGEM",
+  "PDF",
+  "DOCUMENTO",
+  "PLANILHA",
+  "APRESENTACAO",
+  "AUDIO",
+  "VIDEO",
+  "OUTRO",
+];
 
-export function WorkMedia({ projetoId, obraId, canEdit, onChanged, onError }: { projetoId: string; obraId: string; canEdit: boolean; onChanged: () => Promise<void>; onError: (message: string) => void }) {
+const TYPE_LABEL: Record<AttachmentType, string> = {
+  IMAGEM: "Imagem",
+  PDF: "PDF",
+  DOCUMENTO: "Documento",
+  PLANILHA: "Planilha",
+  APRESENTACAO: "Apresentação",
+  AUDIO: "Áudio",
+  VIDEO: "Vídeo",
+  OUTRO: "Outro",
+};
+
+const TYPE_ICON: Record<AttachmentType, LucideIcon> = {
+  IMAGEM: FileImage,
+  PDF: FileText,
+  DOCUMENTO: FileText,
+  PLANILHA: FileSpreadsheet,
+  APRESENTACAO: Presentation,
+  AUDIO: FileAudio,
+  VIDEO: FileVideo,
+  OUTRO: Paperclip,
+};
+
+const IMAGE_FORM_ID = "editar-imagem-obra";
+const ATTACHMENT_FORM_ID = "editar-anexo-obra";
+
+type GalleryItem = WorkImage & { origem: "OBRA" | "ASSINATURA" };
+type Editing =
+  | { kind: "imagem"; id: string | null }
+  | { kind: "anexo"; id: string | null }
+  | null;
+
+function optional(form: FormData, key: string) {
+  const value = form.get(key);
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+export function WorkMedia({
+  projetoId,
+  obraId,
+  canEdit,
+  onChanged,
+  onError,
+}: {
+  projetoId: string;
+  obraId: string;
+  canEdit: boolean;
+  onChanged: () => Promise<void>;
+  onError: (message: string) => void;
+}) {
   const base = `/projetos/${projetoId}/obras/${obraId}`;
   const [gallery, setGallery] = useState<WorkGallery | null>(null);
   const [attachments, setAttachments] = useState<WorkAttachment[] | null>(null);
   const [busy, setBusy] = useState(false);
-  const load = useCallback(async () => {
-    const [g, a] = await Promise.all([apiFetch<WorkGallery>(`${base}/galeria`), apiFetch<WorkAttachment[]>(`${base}/anexos`)]);
-    setGallery(g); setAttachments(a);
-  }, [base]);
+  const [tab, setTab] = useState("imagens");
+  const [editing, setEditing] = useState<Editing>(null);
+
+  // Cadeia de promise em vez de async/await: o lint de hooks trata uma função
+  // async chamada no efeito como setState síncrono.
+  const load = useCallback(
+    () =>
+      Promise.all([
+        apiFetch<WorkGallery>(`${base}/galeria`),
+        apiFetch<WorkAttachment[]>(`${base}/anexos`),
+      ]).then(([galleryData, attachmentData]) => {
+        setGallery(galleryData);
+        setAttachments(attachmentData);
+      }),
+    [base],
+  );
+
   useEffect(() => {
     let active = true;
-    Promise.all([apiFetch<WorkGallery>(`${base}/galeria`), apiFetch<WorkAttachment[]>(`${base}/anexos`)])
-      .then(([g, a]) => { if (active) { setGallery(g); setAttachments(a); } })
-      .catch((e: unknown) => { if (active) onError(message(e)); });
-    return () => { active = false; };
-  }, [base, onError]);
-  const items = useMemo(() => [
-    ...(gallery?.imagens.map((item) => ({ ...item, origem: "OBRA" as const })) ?? []),
-    ...(gallery?.assinaturas.map((item) => ({ ...item, creditos: null, observacoes: `Local: ${item.localAssinatura.nome}`, principal: false, origem: "ASSINATURA" as const })) ?? []),
-  ].sort((a, b) => Date.parse(b.criadoEm) - Date.parse(a.criadoEm)), [gallery]);
+    load().catch((caught: unknown) => {
+      if (active) onError(errorMessage(caught));
+    });
+    return () => {
+      active = false;
+    };
+  }, [load, onError]);
+
+  const items = useMemo<GalleryItem[]>(
+    () =>
+      [
+        ...(gallery?.imagens.map((item) => ({
+          ...item,
+          origem: "OBRA" as const,
+        })) ?? []),
+        ...(gallery?.assinaturas.map((item) => ({
+          ...item,
+          creditos: null,
+          observacoes: `Local: ${item.localAssinatura.nome}`,
+          principal: false,
+          atualizadoEm: item.criadoEm,
+          origem: "ASSINATURA" as const,
+        })) ?? []),
+      ].sort((a, b) => Date.parse(b.criadoEm) - Date.parse(a.criadoEm)),
+    [gallery],
+  );
+
   async function action(run: () => Promise<unknown>, refreshWork = false) {
-    setBusy(true); onError("");
-    try { await run(); await load(); if (refreshWork) await onChanged(); }
-    catch (e: unknown) { onError(message(e)); }
-    finally { setBusy(false); }
+    setBusy(true);
+    onError("");
+    try {
+      await run();
+      await load();
+      if (refreshWork) await onChanged();
+      return true;
+    } catch (caught: unknown) {
+      onError(errorMessage(caught));
+      return false;
+    } finally {
+      setBusy(false);
+    }
   }
-  function addImage(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault(); const form = event.currentTarget; const data = new FormData(form);
-    action(() => apiFetch(`${base}/imagens`, { method: "POST", body: JSON.stringify({ imagemUrl: data.get("imagemUrl"), creditos: optional(data, "creditos"), observacoes: optional(data, "observacoes") }) })).then(() => form.reset());
+
+  async function removeImage(item: GalleryItem) {
+    if (!window.confirm("Deseja realmente excluir esta imagem?")) return;
+    await action(
+      () => apiFetch(`${base}/imagens/${item.id}`, { method: "DELETE" }),
+      item.principal,
+    );
   }
-  function addAttachment(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault(); const form = event.currentTarget; const data = new FormData(form);
-    action(() => apiFetch(`${base}/anexos`, { method: "POST", body: JSON.stringify({ arquivoUrl: data.get("arquivoUrl"), tipo: data.get("tipo"), observacoes: optional(data, "observacoes") }) })).then(() => form.reset());
+
+  async function removeAttachment(id: string) {
+    if (!window.confirm("Deseja realmente excluir este anexo?")) return;
+    await action(() => apiFetch(`${base}/anexos/${id}`, { method: "DELETE" }));
   }
-  return <details className="mt-4 border-t border-slate-100 pt-3">
-    <summary className="cursor-pointer text-sm font-semibold text-primary">Imagens e Anexos</summary>
-    <section className="mt-4"><h4 className="text-sm font-bold">Obras</h4>
-      {!gallery ? <p className="mt-2 text-xs text-slate-500">Carregando…</p> : items.length === 0 ? <p className="mt-2 text-xs text-slate-500">Nenhuma imagem.</p> : <div className="mt-3 grid grid-cols-2 gap-3">{items.map((item) => <article key={`${item.origem}-${item.id}`} className="overflow-hidden rounded-xl border bg-white">
-        <a href={item.imagemUrl} target="_blank" rel="noopener noreferrer"><span role="img" aria-label={item.origem === "ASSINATURA" ? "Assinatura" : "Imagem da obra"} className="block aspect-square bg-slate-100 bg-cover bg-center" style={{ backgroundImage: `url(${JSON.stringify(item.imagemUrl)})` }} /></a>
-        <div className="p-2 text-xs">{item.principal && <strong className="rounded bg-primary-100 px-1.5 py-0.5 text-primary-800">Principal</strong>}{item.origem === "ASSINATURA" && <strong className="rounded bg-violet-100 px-1.5 py-0.5 text-violet-800">Assinatura</strong>}{item.creditos && <p className="mt-2 text-slate-600">{item.creditos}</p>}{item.observacoes && <details className="mt-2"><summary className="cursor-pointer font-semibold">Detalhes</summary><p className="mt-1 text-slate-600">{item.observacoes}</p></details>}
-        {canEdit && item.origem === "OBRA" && <div className="mt-2 flex flex-wrap gap-1">{!item.principal && <button disabled={busy} onClick={() => action(() => apiFetch(`${base}/imagens/${item.id}/principal`, { method: "PATCH" }), true)} className="rounded border px-2 py-1 font-semibold">Definir principal</button>}<button disabled={busy} onClick={() => action(() => apiFetch(`${base}/imagens/${item.id}`, { method: "DELETE" }), item.principal)} className="rounded border border-rose-200 px-2 py-1 font-semibold text-rose-700">Excluir</button></div>}</div>
-      </article>)}</div>}
-      {canEdit && <form onSubmit={addImage} className="mt-3 grid gap-2"><input required type="url" name="imagemUrl" placeholder="URL da imagem" className={field}/><input name="creditos" maxLength={500} placeholder="Créditos (opcional)" className={field}/><textarea name="observacoes" maxLength={5000} placeholder="Observações (opcional)" className={field}/><button disabled={busy} className="rounded-lg bg-primary px-3 py-2 text-xs font-semibold text-white">Adicionar imagem</button></form>}
-    </section>
-    <section className="mt-5 border-t pt-4"><h4 className="text-sm font-bold">Anexos</h4>
-      {!attachments ? <p className="mt-2 text-xs text-slate-500">Carregando…</p> : attachments.length === 0 ? <p className="mt-2 text-xs text-slate-500">Nenhum anexo.</p> : <div className="mt-3 grid grid-cols-2 gap-3">{attachments.map((item) => <article key={item.id} className="rounded-xl border p-3 text-xs"><a href={item.arquivoUrl} target="_blank" rel="noopener noreferrer" className="block font-bold text-primary">{item.tipo === "IMAGEM" ? "▧" : item.tipo === "PDF" ? "PDF" : "Arquivo"}<span className="mt-1 block text-slate-700">{item.tipo}</span></a>{item.observacoes && <details className="mt-2"><summary className="cursor-pointer font-semibold">Detalhes</summary><p className="mt-1 text-slate-600">{item.observacoes}</p></details>}{canEdit && <button disabled={busy} onClick={() => action(() => apiFetch(`${base}/anexos/${item.id}`, { method: "DELETE" }))} className="mt-2 rounded border border-rose-200 px-2 py-1 font-semibold text-rose-700">Excluir</button>}</article>)}</div>}
-      {canEdit && <form onSubmit={addAttachment} className="mt-3 grid gap-2"><input required type="url" name="arquivoUrl" placeholder="URL do arquivo" className={field}/><select required name="tipo" className={field}>{types.map((type) => <option key={type}>{type}</option>)}</select><textarea name="observacoes" maxLength={5000} placeholder="Observações (opcional)" className={field}/><button disabled={busy} className="rounded-lg bg-primary px-3 py-2 text-xs font-semibold text-white">Adicionar anexo</button></form>}
-    </section>
-  </details>;
+
+  const editingImage =
+    editing?.kind === "imagem" && editing.id
+      ? items.find((item) => item.id === editing.id)
+      : undefined;
+  const editingAttachment =
+    editing?.kind === "anexo" && editing.id
+      ? attachments?.find((item) => item.id === editing.id)
+      : undefined;
+
+  const loading = !gallery || !attachments;
+
+  const tabs: TabItem[] = [
+    {
+      id: "imagens",
+      label: "Imagens",
+      icon: Images,
+      count: items.length,
+      content: (
+        <RecordSection
+          title="Imagens da obra"
+          icon={ImageOff}
+          addLabel="Adicionar imagem"
+          canAdd={canEdit}
+          onAdd={() => setEditing({ kind: "imagem", id: null })}
+          isEmpty={items.length === 0}
+          emptyText="Nenhuma imagem cadastrada nesta obra."
+        >
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+            {items.map((item) => (
+              <ImageCard
+                key={`${item.origem}-${item.id}`}
+                item={item}
+                canEdit={canEdit}
+                busy={busy}
+                onEdit={() => setEditing({ kind: "imagem", id: item.id })}
+                onDelete={() => removeImage(item)}
+                onMakePrimary={() =>
+                  action(
+                    () =>
+                      apiFetch(`${base}/imagens/${item.id}/principal`, {
+                        method: "PATCH",
+                      }),
+                    true,
+                  )
+                }
+              />
+            ))}
+          </div>
+        </RecordSection>
+      ),
+    },
+    {
+      id: "anexos",
+      label: "Anexos",
+      icon: Paperclip,
+      count: attachments?.length ?? 0,
+      content: (
+        <RecordSection
+          title="Anexos"
+          icon={Paperclip}
+          addLabel="Adicionar anexo"
+          canAdd={canEdit}
+          onAdd={() => setEditing({ kind: "anexo", id: null })}
+          isEmpty={(attachments?.length ?? 0) === 0}
+          emptyText="Nenhum arquivo anexado a esta obra."
+        >
+          {attachments?.map((item) => {
+            const Icon = TYPE_ICON[item.tipo] ?? Paperclip;
+            return (
+              <RecordCard
+                key={item.id}
+                title={
+                  <span className="flex items-center gap-2">
+                    <Icon aria-hidden className="size-4 shrink-0 text-ink-500" />
+                    {TYPE_LABEL[item.tipo] ?? item.tipo}
+                  </span>
+                }
+                rows={[
+                  [
+                    "Arquivo",
+                    <a
+                      key="url"
+                      href={item.arquivoUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="font-medium text-primary-700 underline wrap-break-word"
+                    >
+                      Abrir arquivo
+                    </a>,
+                  ],
+                  ["Extensão", item.extensao],
+                  ["Observações", item.observacoes],
+                ]}
+                busy={busy}
+                onEdit={
+                  canEdit
+                    ? () => setEditing({ kind: "anexo", id: item.id })
+                    : undefined
+                }
+                onDelete={canEdit ? () => removeAttachment(item.id) : undefined}
+              />
+            );
+          })}
+        </RecordSection>
+      ),
+    },
+  ];
+
+  if (loading) {
+    return <p className="text-sm text-muted-foreground">Carregando mídias...</p>;
+  }
+
+  return (
+    <>
+      <Tabs variant="nested" items={tabs} value={tab} onChange={setTab} />
+
+      {editing?.kind === "imagem" && (
+        <Modal
+          title={editingImage ? "Editar imagem" : "Adicionar imagem"}
+          onClose={() => setEditing(null)}
+          footer={
+            <>
+              <Button variant="secondary" onClick={() => setEditing(null)}>
+                Cancelar
+              </Button>
+              <Button type="submit" form={IMAGE_FORM_ID} disabled={busy}>
+                {busy ? "Salvando..." : "Salvar"}
+              </Button>
+            </>
+          }
+        >
+          <form
+            id={IMAGE_FORM_ID}
+            className="grid gap-4"
+            onSubmit={async (event: FormEvent<HTMLFormElement>) => {
+              event.preventDefault();
+              const form = new FormData(event.currentTarget);
+              const body = {
+                imagemUrl: form.get("imagemUrl"),
+                creditos: optional(form, "creditos"),
+                observacoes: optional(form, "observacoes"),
+              };
+              const ok = await action(
+                () =>
+                  editingImage
+                    ? apiFetch(`${base}/imagens/${editingImage.id}`, {
+                        method: "PATCH",
+                        body: JSON.stringify(body),
+                      })
+                    : apiFetch(`${base}/imagens`, {
+                        method: "POST",
+                        body: JSON.stringify(body),
+                      }),
+                Boolean(editingImage?.principal),
+              );
+              if (ok) setEditing(null);
+            }}
+          >
+            <Input
+              name="imagemUrl"
+              label="URL da imagem"
+              type="url"
+              required
+              autoFocus
+              defaultValue={editingImage?.imagemUrl ?? ""}
+              placeholder="https://..."
+            />
+            <Input
+              name="creditos"
+              label="Créditos"
+              maxLength={500}
+              defaultValue={editingImage?.creditos ?? ""}
+              placeholder="Opcional"
+            />
+            <Textarea
+              name="observacoes"
+              label="Observações"
+              maxLength={5000}
+              rows={3}
+              defaultValue={editingImage?.observacoes ?? ""}
+            />
+          </form>
+        </Modal>
+      )}
+
+      {editing?.kind === "anexo" && (
+        <Modal
+          title={editingAttachment ? "Editar anexo" : "Adicionar anexo"}
+          onClose={() => setEditing(null)}
+          footer={
+            <>
+              <Button variant="secondary" onClick={() => setEditing(null)}>
+                Cancelar
+              </Button>
+              <Button type="submit" form={ATTACHMENT_FORM_ID} disabled={busy}>
+                {busy ? "Salvando..." : "Salvar"}
+              </Button>
+            </>
+          }
+        >
+          <form
+            id={ATTACHMENT_FORM_ID}
+            className="grid gap-4"
+            onSubmit={async (event: FormEvent<HTMLFormElement>) => {
+              event.preventDefault();
+              const form = new FormData(event.currentTarget);
+              const body = {
+                arquivoUrl: form.get("arquivoUrl"),
+                tipo: form.get("tipo"),
+                observacoes: optional(form, "observacoes"),
+              };
+              const ok = await action(() =>
+                editingAttachment
+                  ? apiFetch(`${base}/anexos/${editingAttachment.id}`, {
+                      method: "PATCH",
+                      body: JSON.stringify(body),
+                    })
+                  : apiFetch(`${base}/anexos`, {
+                      method: "POST",
+                      body: JSON.stringify(body),
+                    }),
+              );
+              if (ok) setEditing(null);
+            }}
+          >
+            <Input
+              name="arquivoUrl"
+              label="URL do arquivo"
+              type="url"
+              required
+              autoFocus
+              defaultValue={editingAttachment?.arquivoUrl ?? ""}
+              placeholder="https://..."
+            />
+            <Select
+              name="tipo"
+              label="Tipo"
+              required
+              placeholder={null}
+              defaultValue={editingAttachment?.tipo ?? "OUTRO"}
+              options={TYPES.map((type) => ({
+                value: type,
+                label: TYPE_LABEL[type],
+              }))}
+            />
+            <Textarea
+              name="observacoes"
+              label="Observações"
+              maxLength={5000}
+              rows={3}
+              defaultValue={editingAttachment?.observacoes ?? ""}
+            />
+          </form>
+        </Modal>
+      )}
+    </>
+  );
 }
-function optional(data: FormData, key: string) { const value = data.get(key); return typeof value === "string" && value.trim() ? value : undefined; }
-function message(error: unknown) { return error instanceof Error ? error.message : "Não foi possível concluir a operação."; }
+
+function ImageCard({
+  item,
+  canEdit,
+  busy,
+  onEdit,
+  onDelete,
+  onMakePrimary,
+}: {
+  item: GalleryItem;
+  canEdit: boolean;
+  busy: boolean;
+  onEdit: () => void;
+  onDelete: () => void;
+  onMakePrimary: () => void;
+}) {
+  // Assinaturas vêm da catalogação; editá-las aqui sairia do lugar.
+  const editable = canEdit && item.origem === "OBRA";
+
+  return (
+    <article className="flex flex-col overflow-hidden rounded-xl border border-border bg-surface shadow-sm">
+      <a
+        href={item.imagemUrl}
+        target="_blank"
+        rel="noopener noreferrer"
+        aria-label={
+          item.origem === "ASSINATURA" ? "Abrir assinatura" : "Abrir imagem"
+        }
+      >
+        <span
+          role="img"
+          aria-label={
+            item.origem === "ASSINATURA" ? "Assinatura" : "Imagem da obra"
+          }
+          className="block aspect-square bg-ink-100 bg-cover bg-center"
+          style={{ backgroundImage: `url(${JSON.stringify(item.imagemUrl)})` }}
+        />
+      </a>
+
+      <div className="flex flex-1 flex-col gap-2 p-4">
+        <div className="flex flex-wrap gap-1.5">
+          {item.principal && (
+            <Badge tone="brand" icon={<Star />}>
+              Principal
+            </Badge>
+          )}
+          {item.origem === "ASSINATURA" && (
+            <Badge tone="neutral">Assinatura</Badge>
+          )}
+        </div>
+
+        {item.creditos && (
+          <p className="text-xs text-muted-foreground">{item.creditos}</p>
+        )}
+        {item.observacoes && (
+          <p className="text-xs text-muted-foreground">{item.observacoes}</p>
+        )}
+
+        {editable && (
+          <div className="mt-auto flex flex-wrap items-center gap-1 pt-2">
+            {!item.principal && (
+              <Button
+                size="sm"
+                variant="secondary"
+                disabled={busy}
+                icon={<Star className="size-4" />}
+                onClick={onMakePrimary}
+              >
+                Tornar principal
+              </Button>
+            )}
+            <Button
+              size="sm"
+              variant="ghost"
+              disabled={busy}
+              icon={<Pencil className="size-4" />}
+              onClick={onEdit}
+            >
+              Editar
+            </Button>
+            <IconButton
+              aria-label="Excluir imagem"
+              size="sm"
+              variant="dangerGhost"
+              disabled={busy}
+              onClick={onDelete}
+            >
+              <Trash2 className="size-4" />
+            </IconButton>
+          </div>
+        )}
+      </div>
+    </article>
+  );
+}

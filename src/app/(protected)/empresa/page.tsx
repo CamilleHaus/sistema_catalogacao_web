@@ -119,7 +119,7 @@ export default function CompanyAdminPage() {
         </div>
 
         {error && <div className="mt-6"><PageMessage message={error} /></div>}
-        {success && <div className="mt-6 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">{success}</div>}
+        {success && <div className="mt-6 rounded-xl border border-success-100 bg-success-50 px-4 py-3 text-sm text-success-800">{success}</div>}
 
         <section className="mt-8">
           <div className="grid gap-4">
@@ -130,15 +130,15 @@ export default function CompanyAdminPage() {
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-3">
                     <h2 className="truncate text-lg font-semibold">{project.nome}</h2>
-                    <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${project.status === "ATIVO" ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-600"}`}>
+                    <span className={`rounded-sm px-2.5 py-1 text-xs font-semibold ${project.status === "ATIVO" ? "bg-success-50 text-success-700" : "bg-ink-100 text-ink-600"}`}>
                       {project.status === "ATIVO" ? "Ativo" : "Arquivado"}
                     </span>
                   </div>
-                  <p className="mt-1 text-sm text-slate-500">{project.cliente.nome} ({project.cliente.codigo})</p>
-                  <p className="mt-2 text-xs font-medium text-slate-500">{project._count?.usuarios ?? 0} usuários vinculados</p>
+                  <p className="mt-1 text-sm text-ink-500">{project.cliente.nome} ({project.cliente.codigo})</p>
+                  <p className="mt-2 text-xs font-medium text-ink-500">{project._count?.usuarios ?? 0} usuários vinculados</p>
                 </div>
                 <div className="flex shrink-0 flex-wrap gap-2">
-                  <Link href={`/projetos/${project.id}/localizacoes`} className="inline-flex rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold hover:bg-slate-50">Localizações</Link>
+                  <Link href={`/projetos/${project.id}/localizacoes`} className="inline-flex rounded-lg border border-ink-300 px-3 py-2 text-sm font-semibold hover:bg-ink-50">Localizações</Link>
                   <Link href={`/projetos/${project.id}/obras`} className="inline-flex rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-white hover:bg-primary-800">Ver obras</Link>
                 </div>
               </article>
@@ -151,7 +151,7 @@ export default function CompanyAdminPage() {
             <form className="grid gap-4" onSubmit={handleCreateClient}>
               <Field label="Nome" name="nome" minLength={2} maxLength={150} autoFocus />
               <Field label="Código" name="codigo" maxLength={50} placeholder="Ex.: MAR" />
-              <label className="grid gap-2 text-sm font-medium">Descrição opcional<textarea name="descricao" maxLength={1000} className="min-h-24 rounded-xl border border-slate-300 px-3 py-2 outline-none focus:border-primary" /></label>
+              <label className="grid gap-2 text-sm font-medium">Descrição opcional<textarea name="descricao" maxLength={1000} className="min-h-24 rounded-xl border border-ink-300 px-3 py-2 outline-none focus:border-primary" /></label>
               <ModalActions saving={saving} onCancel={() => setOpenModal(null)}>Cadastrar cliente</ModalActions>
             </form>
           </Modal>
@@ -161,8 +161,8 @@ export default function CompanyAdminPage() {
           <Modal title="Novo projeto" description="Todo projeto deve pertencer a um cliente." onClose={() => setOpenModal(null)}>
             <form className="grid gap-4" onSubmit={handleCreateProject}>
               <Field label="Nome" name="nome" minLength={2} maxLength={150} autoFocus />
-              <label className="grid gap-2 text-sm font-medium">Cliente<select name="clienteId" required className="rounded-xl border border-slate-300 bg-white px-3 py-2 outline-none focus:border-primary"><option value="">Selecione um cliente</option>{clients.map((client) => <option key={client.id} value={client.id}>{client.nome} ({client.codigo})</option>)}</select></label>
-              {clients.length === 0 && <p className="text-sm text-amber-700">Cadastre um cliente antes de criar o primeiro projeto.</p>}
+              <label className="grid gap-2 text-sm font-medium">Cliente<select name="clienteId" required className="rounded-xl border border-ink-300 bg-white px-3 py-2 outline-none focus:border-primary"><option value="">Selecione um cliente</option>{clients.map((client) => <option key={client.id} value={client.id}>{client.nome} ({client.codigo})</option>)}</select></label>
+              {clients.length === 0 && <p className="text-sm text-warning-700">Cadastre um cliente antes de criar o primeiro projeto.</p>}
               <ModalActions saving={saving || clients.length === 0} onCancel={() => setOpenModal(null)}>Criar projeto</ModalActions>
             </form>
           </Modal>
@@ -173,8 +173,8 @@ export default function CompanyAdminPage() {
 }
 
 function Modal({ title, description, onClose, children }: { title: string; description: string; onClose: () => void; children: React.ReactNode }) {
-  return <div className="fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-slate-950/60 p-4" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}><section role="dialog" aria-modal="true" aria-labelledby="modal-title" className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl"><div className="flex items-start justify-between gap-4"><div><h2 id="modal-title" className="text-xl font-bold">{title}</h2><p className="mt-1 text-sm text-slate-500">{description}</p></div><button type="button" onClick={onClose} aria-label="Fechar modal" className="grid size-9 shrink-0 place-items-center rounded-lg text-xl text-slate-500 hover:bg-slate-100">×</button></div><div className="mt-6">{children}</div></section></div>;
+  return <div className="fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-ink-950/60 p-4" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}><section role="dialog" aria-modal="true" aria-labelledby="modal-title" className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl"><div className="flex items-start justify-between gap-4"><div><h2 id="modal-title" className="text-xl font-bold">{title}</h2><p className="mt-1 text-sm text-ink-500">{description}</p></div><button type="button" onClick={onClose} aria-label="Fechar modal" className="grid size-9 shrink-0 place-items-center rounded-lg text-xl text-ink-500 hover:bg-ink-100">×</button></div><div className="mt-6">{children}</div></section></div>;
 }
-function ModalActions({ saving, onCancel, children }: { saving: boolean; onCancel: () => void; children: React.ReactNode }) { return <div className="mt-2 flex justify-end gap-3"><button type="button" onClick={onCancel} className="rounded-xl border border-slate-300 px-4 py-2.5 font-semibold hover:bg-slate-50">Cancelar</button><button type="submit" disabled={saving} className="rounded-xl bg-primary px-4 py-2.5 font-semibold text-white hover:bg-primary-800 disabled:cursor-not-allowed disabled:opacity-60">{saving ? "Aguarde..." : children}</button></div>; }
-function Field({ label, name, ...props }: React.InputHTMLAttributes<HTMLInputElement> & { label: string; name: string }) { return <label className="grid gap-2 text-sm font-medium">{label}<input name={name} required className="rounded-xl border border-slate-300 px-3 py-2 outline-none focus:border-primary" {...props} /></label>; }
+function ModalActions({ saving, onCancel, children }: { saving: boolean; onCancel: () => void; children: React.ReactNode }) { return <div className="mt-2 flex justify-end gap-3"><button type="button" onClick={onCancel} className="rounded-xl border border-ink-300 px-4 py-2.5 font-semibold hover:bg-ink-50">Cancelar</button><button type="submit" disabled={saving} className="rounded-xl bg-primary px-4 py-2.5 font-semibold text-white hover:bg-primary-800 disabled:cursor-not-allowed disabled:opacity-60">{saving ? "Aguarde..." : children}</button></div>; }
+function Field({ label, name, ...props }: React.InputHTMLAttributes<HTMLInputElement> & { label: string; name: string }) { return <label className="grid gap-2 text-sm font-medium">{label}<input name={name} required className="rounded-xl border border-ink-300 px-3 py-2 outline-none focus:border-primary" {...props} /></label>; }
 function messageFrom(error: unknown, fallback: string) { return error instanceof Error ? error.message : fallback; }

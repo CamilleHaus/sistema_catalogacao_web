@@ -1,37 +1,151 @@
 @import "tailwindcss";
 
-:root {
-  --background: #f1f5f9;
-  --foreground: #0f172a;
-  --primary: #6b0101;
-}
+@theme {
+  /* Marca — derivada de #6b0101 em OKLCH (matiz 29.1) e ancorada no passo 900. */
+  --color-primary-50: #fff2f0;
+  --color-primary-100: #ffe4df;
+  --color-primary-200: #ffccc4;
+  --color-primary-300: #ffa79a;
+  --color-primary-400: #f77564;
+  --color-primary-500: #e44739;
+  --color-primary-600: #c82c21;
+  --color-primary-700: #a31b13;
+  --color-primary-800: #860f09;
+  --color-primary-900: #6b0101;
+  --color-primary-950: #450100;
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --color-primary: var(--primary);
-  --color-primary-50: #fff1f1;
-  --color-primary-100: #ffe0e0;
-  --color-primary-200: #ffc7c7;
-  --color-primary-300: #ffa0a0;
-  --color-primary-400: #ff6969;
-  --color-primary-500: #f53434;
-  --color-primary-600: #d91616;
-  --color-primary-700: #b70e0e;
-  --color-primary-800: #8f0d0d;
-  --color-primary-900: #760f0f;
-  --color-primary-950: #410303;
+  /* Cinza puro (croma zero). O bordô fica reservado para header, ações
+     primárias e destaques — a interface em si é neutra. */
+  --color-ink-50: #fafafa;
+  --color-ink-100: #f4f4f4;
+  --color-ink-200: #e6e6e6;
+  --color-ink-300: #d4d4d4;
+  --color-ink-400: #a3a3a3;
+  --color-ink-500: #767676;
+  --color-ink-600: #565656;
+  --color-ink-700: #434343;
+  --color-ink-800: #282828;
+  --color-ink-900: #181818;
+  --color-ink-950: #0b0b0b;
+
+  /* Estados. O bordô da marca é escuro o bastante para não se confundir com o
+     vermelho de perigo, que é bem mais claro e saturado. */
+  --color-success-50: #ecfdf3;
+  --color-success-100: #d3f8e0;
+  --color-success-600: #08875a;
+  --color-success-700: #076c4a;
+  --color-success-800: #075239;
+
+  --color-warning-50: #fff8eb;
+  --color-warning-100: #ffeecc;
+  --color-warning-600: #b45309;
+  --color-warning-700: #92400e;
+  --color-warning-800: #78350f;
+
+  --color-danger-50: #fef2f2;
+  --color-danger-100: #ffe2e2;
+  --color-danger-200: #ffc9c9;
+  --color-danger-600: #e0322c;
+  --color-danger-700: #bd2222;
+  --color-danger-800: #9c1f1f;
+
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+
+  /* Cantos bem mais retos que o padrão do Tailwind. Como toda a interface usa
+     a escala (rounded-lg em controles, rounded-xl em cards, rounded-2xl em
+     modais), mexer aqui muda o projeto inteiro de uma vez. */
+  --radius-xs: 0.0625rem;
+  --radius-sm: 0.125rem;
+  --radius-md: 0.125rem;
+  --radius-lg: 0.1875rem;
+  --radius-xl: 0.25rem;
+  --radius-2xl: 0.375rem;
+  --radius-3xl: 0.5rem;
+
+  /* Sombras mais suaves e difusas que o padrão do Tailwind. */
+  --shadow-xs: 0 1px 2px 0 rgb(24 24 24 / 0.05);
+  --shadow-sm:
+    0 1px 2px 0 rgb(24 24 24 / 0.04), 0 1px 3px 0 rgb(24 24 24 / 0.06);
+  --shadow-md:
+    0 2px 4px -1px rgb(24 24 24 / 0.05), 0 4px 10px -2px rgb(24 24 24 / 0.08);
+  --shadow-lg:
+    0 4px 8px -2px rgb(24 24 24 / 0.06), 0 12px 24px -4px rgb(24 24 24 / 0.1);
+  --shadow-xl:
+    0 8px 16px -4px rgb(24 24 24 / 0.08), 0 24px 48px -8px rgb(24 24 24 / 0.14);
+  --shadow-2xl: 0 32px 64px -12px rgb(24 24 24 / 0.22);
+}
+
+:root {
+  --background: var(--color-ink-100);
+  --surface: #ffffff;
+  --surface-muted: var(--color-ink-50);
+  --foreground: var(--color-ink-900);
+  --muted-foreground: var(--color-ink-500);
+  --border: var(--color-ink-200);
+  --border-strong: var(--color-ink-300);
+  --primary: var(--color-primary-900);
+  --ring: var(--color-primary-700);
+}
+
+/* `inline` faz as utilities compilarem para var(--token), então trocar o tema
+   é só redefinir as variáveis acima. */
+@theme inline {
+  --color-background: var(--background);
+  --color-surface: var(--surface);
+  --color-surface-muted: var(--surface-muted);
+  --color-foreground: var(--foreground);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-primary: var(--primary);
+  --color-ring: var(--ring);
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
   font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Foco visível e consistente em tudo que é interativo, sem anel no clique de
+   mouse. Cada componente pode sobrescrever, mas ninguém fica sem foco. */
+:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+::selection {
+  background: var(--color-primary-100);
+  color: var(--color-primary-950);
 }
 
 button,
 a {
   transition-duration: 150ms;
+}
+
+@keyframes overlay-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes modal-in {
+  from {
+    opacity: 0;
+    transform: translateY(0.75rem) scale(0.98);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

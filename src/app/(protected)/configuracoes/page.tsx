@@ -171,7 +171,7 @@ export default function RegistersPage() {
     <RoleGate allow={["ADMIN_EMPRESA", "USUARIO"]}>
       <AppShell>
         <h1 className="text-3xl font-bold tracking-tight">Configurações</h1>
-        <p className="mt-2 text-sm text-slate-500">
+        <p className="mt-2 text-sm text-ink-500">
           Gerencie os valores reutilizáveis nas obras da empresa.
         </p>
         {error && (
@@ -180,28 +180,28 @@ export default function RegistersPage() {
           </div>
         )}
         {message && (
-          <div className="mt-6 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+          <div className="mt-6 rounded-xl border border-success-100 bg-success-50 px-4 py-3 text-sm text-success-800">
             {message}
           </div>
         )}
 
         <div className="mt-8 grid items-start gap-8 lg:grid-cols-[240px_minmax(0,1fr)]">
-          <nav aria-label="Tipos de configuração" className="overflow-hidden rounded-2xl border border-slate-200 bg-white p-2 shadow-sm">
+          <nav aria-label="Tipos de configuração" className="overflow-hidden rounded-2xl border border-ink-200 bg-white p-2 shadow-sm">
             {registerTabs.filter((tab) => !tab.adminOnly || user?.papel === "ADMIN_EMPRESA").map((tab) => (
-              <button key={tab.id} type="button" onClick={() => { setActiveTab(tab.id); setCreateOpen(false); }} aria-current={activeTab === tab.id ? "page" : undefined} className={`flex w-full rounded-xl px-3 py-2.5 text-left text-sm font-semibold ${activeTab === tab.id ? "bg-primary text-white" : "text-slate-600 hover:bg-slate-100 hover:text-slate-950"}`}>
+              <button key={tab.id} type="button" onClick={() => { setActiveTab(tab.id); setCreateOpen(false); }} aria-current={activeTab === tab.id ? "page" : undefined} className={`flex w-full rounded-xl px-3 py-2.5 text-left text-sm font-semibold ${activeTab === tab.id ? "bg-primary text-white" : "text-ink-600 hover:bg-ink-100 hover:text-ink-950"}`}>
                 {tab.label}
               </button>
             ))}
           </nav>
 
-          <div className="min-w-0 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+          <div className="min-w-0 rounded-2xl border border-ink-200 bg-white p-6 shadow-sm">
             <div className="flex items-center justify-between gap-4">
               <h2 className="text-2xl font-bold">{activeLabel}</h2>
               {canCreate && <button type="button" onClick={() => setCreateOpen(true)} className="shrink-0 rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-white hover:bg-primary-800">Novo cadastro</button>}
             </div>
 
         {createOpen && <Modal title={activeLabel} onClose={() => setCreateOpen(false)}>
-        {activeTab === "clientes" && user?.papel === "ADMIN_EMPRESA" && <Card title="Novo cliente"><form className="grid gap-3" onSubmit={(event) => submit(event, "/clientes", "Cliente criado.", (data) => ({ nome: data.get("nome"), codigo: data.get("codigo"), descricao: value(data, "descricao") }))}><Field name="nome" label="Nome" required minLength={2} maxLength={150}/><Field name="codigo" label="Código" required maxLength={50} placeholder="Ex.: MAR"/><label className="grid gap-2 text-sm font-medium">Descrição opcional<textarea name="descricao" maxLength={1000} className="min-h-24 rounded-xl border border-slate-300 px-3 py-2 outline-none focus:border-primary"/></label><Button saving={saving}>Cadastrar cliente</Button></form></Card>}
+        {activeTab === "clientes" && user?.papel === "ADMIN_EMPRESA" && <Card title="Novo cliente"><form className="grid gap-3" onSubmit={(event) => submit(event, "/clientes", "Cliente criado.", (data) => ({ nome: data.get("nome"), codigo: data.get("codigo"), descricao: value(data, "descricao") }))}><Field name="nome" label="Nome" required minLength={2} maxLength={150}/><Field name="codigo" label="Código" required maxLength={50} placeholder="Ex.: MAR"/><label className="grid gap-2 text-sm font-medium">Descrição opcional<textarea name="descricao" maxLength={1000} className="min-h-24 rounded-xl border border-ink-300 px-3 py-2 outline-none focus:border-primary"/></label><Button saving={saving}>Cadastrar cliente</Button></form></Card>}
 
         {user?.papel === "ADMIN_EMPRESA" && (
           <div className="mt-6">
@@ -266,7 +266,7 @@ export default function RegistersPage() {
                   Escopo
                   <select
                     name="projetoId"
-                    className="rounded-xl border border-slate-300 bg-white px-3 py-2"
+                    className="rounded-xl border border-ink-300 bg-white px-3 py-2"
                   >
                     <option value="">Geral da empresa</option>
                     {projects.map((project) => (
@@ -355,11 +355,11 @@ export default function RegistersPage() {
                   <div>
                     <div className="flex flex-wrap items-center gap-2">
                       <h3 className="font-semibold">{client.nome}</h3>
-                      <span className="rounded-full bg-primary-50 px-2 py-1 text-xs font-bold text-primary-800">{client.codigo}</span>
+                      <span className="rounded-sm bg-primary-50 px-2 py-1 text-xs font-bold text-primary-800">{client.codigo}</span>
                     </div>
-                    <p className="mt-1 text-sm text-slate-500">{client.descricao || "Sem descrição"}</p>
+                    <p className="mt-1 text-sm text-ink-500">{client.descricao || "Sem descrição"}</p>
                   </div>
-                  <p className="shrink-0 text-xs font-semibold text-slate-500">{client._count?.projetos ?? 0} projetos</p>
+                  <p className="shrink-0 text-xs font-semibold text-ink-500">{client._count?.projetos ?? 0} projetos</p>
                 </article>
               ))}
             </div>
@@ -437,11 +437,11 @@ export default function RegistersPage() {
 
 function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-slate-950/60 p-4" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
+    <div className="fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-ink-950/60 p-4" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
       <section role="dialog" aria-modal="true" aria-labelledby="configuration-modal-title" className="w-full max-w-xl rounded-2xl bg-white p-6 shadow-2xl">
         <div className="flex items-start justify-between gap-4">
           <h2 id="configuration-modal-title" className="text-xl font-bold">{title}</h2>
-          <button type="button" onClick={onClose} aria-label="Fechar modal" className="grid size-9 shrink-0 place-items-center rounded-lg text-xl text-slate-500 hover:bg-slate-100">×</button>
+          <button type="button" onClick={onClose} aria-label="Fechar modal" className="grid size-9 shrink-0 place-items-center rounded-lg text-xl text-ink-500 hover:bg-ink-100">×</button>
         </div>
         <div className="mt-2">{children}</div>
       </section>
@@ -485,7 +485,7 @@ function Field({
       {label}
       <input
         name={name}
-        className="rounded-xl border border-slate-300 px-3 py-2 outline-none focus:border-primary"
+        className="rounded-xl border border-ink-300 px-3 py-2 outline-none focus:border-primary"
         {...props}
       />
     </label>
@@ -528,7 +528,7 @@ function List({
             >
               <h3 className="font-semibold">{item.title}</h3>
               {item.detail && (
-                <p className="mt-1 text-sm text-slate-500">{item.detail}</p>
+                <p className="mt-1 text-sm text-ink-500">{item.detail}</p>
               )}
             </article>
           ))
@@ -537,4 +537,4 @@ function List({
     </section>
   );
 }
-function EditableAux({items,canEdit,saving,rename}:{title:string;items:NamedReference[];canEdit:boolean;saving:boolean;rename:(id:string,nome:string)=>Promise<void>}) { return <section><div className="grid gap-3">{items.length===0?<EmptyState>Nenhum cadastro.</EmptyState>:items.map(x=><article key={x.id} className="rounded-xl border border-slate-100 bg-white p-4">{canEdit?<form onSubmit={e=>{e.preventDefault();const nome=new FormData(e.currentTarget).get("nome");if(typeof nome==="string")void rename(x.id,nome)}} className="flex gap-2"><input name="nome" defaultValue={x.nome} required className="min-w-0 flex-1 rounded-lg border px-3 py-2"/><button disabled={saving} className="rounded-lg border px-3 text-xs font-semibold">Salvar</button></form>:<h3 className="font-semibold">{x.nome}</h3>}</article>)}</div></section> }
+function EditableAux({items,canEdit,saving,rename}:{title:string;items:NamedReference[];canEdit:boolean;saving:boolean;rename:(id:string,nome:string)=>Promise<void>}) { return <section><div className="grid gap-3">{items.length===0?<EmptyState>Nenhum cadastro.</EmptyState>:items.map(x=><article key={x.id} className="rounded-xl border border-ink-100 bg-white p-4">{canEdit?<form onSubmit={e=>{e.preventDefault();const nome=new FormData(e.currentTarget).get("nome");if(typeof nome==="string")void rename(x.id,nome)}} className="flex gap-2"><input name="nome" defaultValue={x.nome} required className="min-w-0 flex-1 rounded-lg border px-3 py-2"/><button disabled={saving} className="rounded-lg border px-3 text-xs font-semibold">Salvar</button></form>:<h3 className="font-semibold">{x.nome}</h3>}</article>)}</div></section> }

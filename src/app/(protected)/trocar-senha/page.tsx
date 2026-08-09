@@ -48,7 +48,7 @@ export default function ChangePasswordPage() {
       <div className="mx-auto max-w-lg rounded-3xl bg-white p-8 shadow-sm">
         <p className="text-sm font-semibold text-primary">Primeiro acesso</p>
         <h1 className="mt-2 text-3xl font-bold tracking-tight">Crie uma nova senha</h1>
-        <p className="mt-3 text-sm leading-6 text-slate-500">
+        <p className="mt-3 text-sm leading-6 text-ink-500">
           Antes de continuar, substitua a senha temporária por uma senha pessoal
           com pelo menos oito caracteres.
         </p>
@@ -61,7 +61,7 @@ export default function ChangePasswordPage() {
               minLength={8}
               autoComplete="new-password"
               required
-              className="mt-2 w-full rounded-xl border border-slate-300 px-4 py-3 outline-none ring-primary focus:ring-2"
+              className="mt-2 w-full rounded-xl border border-ink-300 px-4 py-3 outline-none ring-primary focus:ring-2"
             />
           </label>
           <label className="block text-sm font-medium">
@@ -72,14 +72,14 @@ export default function ChangePasswordPage() {
               minLength={8}
               autoComplete="new-password"
               required
-              className="mt-2 w-full rounded-xl border border-slate-300 px-4 py-3 outline-none ring-primary focus:ring-2"
+              className="mt-2 w-full rounded-xl border border-ink-300 px-4 py-3 outline-none ring-primary focus:ring-2"
             />
           </label>
-          {error && <p className="text-sm text-rose-700">{error}</p>}
+          {error && <p className="text-sm text-danger-700">{error}</p>}
           <button
             type="submit"
             disabled={pending}
-            className="w-full rounded-xl bg-slate-950 px-4 py-3 font-semibold text-white disabled:opacity-60"
+            className="w-full rounded-xl bg-ink-950 px-4 py-3 font-semibold text-white disabled:opacity-60"
           >
             {pending ? "Salvando..." : "Salvar nova senha"}
           </button>

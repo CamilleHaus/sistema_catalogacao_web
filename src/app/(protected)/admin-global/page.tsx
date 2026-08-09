@@ -91,14 +91,14 @@ export default function GlobalAdminPage() {
         </div>
         {error && <div className="mt-6"><PageMessage message={error} /></div>}
         {success && (
-          <div className="mt-6 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+          <div className="mt-6 rounded-xl border border-success-100 bg-success-50 px-4 py-3 text-sm text-success-800">
             {success}
           </div>
         )}
         <section className="mt-8 rounded-2xl bg-white p-6 shadow-sm">
           <div>
             <h2 className="text-xl font-bold">Criar empresa</h2>
-            <p className="mt-1 text-sm text-slate-500">
+            <p className="mt-1 text-sm text-ink-500">
               Cadastre a empresa e seu primeiro administrador de uma só vez.
             </p>
           </div>
@@ -136,7 +136,7 @@ export default function GlobalAdminPage() {
               companies.map((company) => (
                 <article key={company.id} className="rounded-2xl bg-white p-5 shadow-sm">
                   <h3 className="font-semibold">{company.nome}</h3>
-                  <p className="mt-2 text-sm text-slate-500">
+                  <p className="mt-2 text-sm text-ink-500">
                     {company._count.usuarios} usuários · {company._count.projetos} projetos
                   </p>
                 </article>
@@ -151,12 +151,12 @@ export default function GlobalAdminPage() {
 
 function FormField({ label, ...props }: { label: string } & React.InputHTMLAttributes<HTMLInputElement>) {
   return (
-    <label className="block text-sm font-medium text-slate-700">
+    <label className="block text-sm font-medium text-ink-700">
       {label}
       <input
         {...props}
         required
-        className="mt-2 w-full rounded-xl border border-slate-200 px-4 py-3 outline-none transition focus:border-primary focus:ring-2 focus:ring-primary-100"
+        className="mt-2 w-full rounded-xl border border-ink-200 px-4 py-3 outline-none transition focus:border-primary focus:ring-2 focus:ring-primary-100"
       />
     </label>
   );
@@ -164,8 +164,8 @@ function FormField({ label, ...props }: { label: string } & React.InputHTMLAttri
 
 function SummaryCard({ label, value }: { label: string; value: number }) {
   return (
-    <div className="rounded-2xl bg-slate-950 p-5 text-white">
-      <p className="text-sm text-slate-400">{label}</p>
+    <div className="rounded-2xl bg-ink-950 p-5 text-white">
+      <p className="text-sm text-ink-400">{label}</p>
       <p className="mt-2 text-3xl font-bold">{value}</p>
     </div>
   );
