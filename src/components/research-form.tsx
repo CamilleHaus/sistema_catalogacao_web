@@ -55,7 +55,7 @@ export function ResearchForm({ projetoId, obraId, canEdit, onError }: {
     <Section title="Pesquisa museológica" empty={data.pesquisasMuseologicas.length === 0}>
       {data.pesquisasMuseologicas.map((item) => <Record key={item.id} title={item.titulo}>
         <MuseumForm item={item} disabled={!canEdit || busy} onSubmit={(e) => update("museologicas", item.id, e)} />
-        {item.url && <a href={item.url} target="_blank" rel="noopener noreferrer" className="mt-2 block break-all text-xs text-cyan-700 underline">Abrir referência</a>}
+        {item.url && <a href={item.url} target="_blank" rel="noopener noreferrer" className="mt-2 block break-all text-xs text-primary underline">Abrir referência</a>}
         {canEdit && <DeleteButton disabled={busy} onClick={() => remove(`museologicas/${item.id}`)} />}
       </Record>)}
       {canEdit && <Create title="Adicionar pesquisa museológica"><MuseumForm disabled={busy} onSubmit={(e) => create("museologicas", e)} /></Create>}
@@ -70,11 +70,11 @@ function Record({ title, suffix, children }: { title: string | null; suffix?: st
   return <details className="rounded-xl border border-slate-200 p-3"><summary className="cursor-pointer text-sm font-semibold">{title?.trim() || "Sem título"}{suffix ? ` — ${suffix}` : ""}</summary><div className="mt-3">{children}</div></details>;
 }
 function Create({ title, children }: { title: string; children: React.ReactNode }) {
-  return <details className="rounded-xl border border-dashed border-cyan-300 p-3"><summary className="cursor-pointer text-sm font-semibold text-cyan-700">{title}</summary><div className="mt-3">{children}</div></details>;
+  return <details className="rounded-xl border border-dashed border-primary-300 p-3"><summary className="cursor-pointer text-sm font-semibold text-primary">{title}</summary><div className="mt-3">{children}</div></details>;
 }
 const input = "rounded-lg border border-slate-300 px-3 py-2 text-sm disabled:bg-slate-50";
 function Fields({ children }: { children: React.ReactNode }) { return <div className="grid gap-2">{children}</div>; }
-function Save({ disabled }: { disabled: boolean }) { return <button disabled={disabled} className="rounded-lg bg-cyan-700 px-3 py-2 text-xs font-semibold text-white disabled:opacity-60">Salvar</button>; }
+function Save({ disabled }: { disabled: boolean }) { return <button disabled={disabled} className="rounded-lg bg-primary px-3 py-2 text-xs font-semibold text-white disabled:opacity-60">Salvar</button>; }
 function DeleteButton({ disabled, onClick }: { disabled: boolean; onClick: () => void }) { return <button type="button" disabled={disabled} onClick={onClick} className="mt-3 text-xs font-semibold text-rose-700">Excluir registro</button>; }
 function CurriculumForm({ item, disabled, onSubmit }: { item?: WorkCurriculum; disabled: boolean; onSubmit: (e: FormEvent<HTMLFormElement>) => void }) {
   return <form onSubmit={onSubmit}><Fields>{[["nomeExposicao", "Nome da exposição"], ["instituicao", "Instituição"], ["cidade", "Cidade"], ["pais", "País"], ["data", "Data"]].map(([name, placeholder]) => <input key={name} disabled={disabled} name={name} defaultValue={item?.[name as keyof WorkCurriculum] as string ?? ""} placeholder={placeholder} className={input} />)}{!disabled && <Save disabled={disabled} />}</Fields></form>;
@@ -85,7 +85,7 @@ function PublicationForm({ item, disabled, onSubmit }: { item?: WorkPublication;
 function MuseumForm({ item, disabled, onSubmit }: { item?: MuseumResearch; disabled: boolean; onSubmit: (e: FormEvent<HTMLFormElement>) => void }) {
   return <form onSubmit={onSubmit}><Fields><input disabled={disabled} name="titulo" defaultValue={item?.titulo ?? ""} placeholder="Título" className={input} /><textarea disabled={disabled} name="descricao" defaultValue={item?.descricao ?? ""} placeholder="Descrição" className={input} /><input disabled={disabled} type="url" name="url" defaultValue={item?.url ?? ""} placeholder="URL" className={input} />{!disabled && <Save disabled={disabled} />}</Fields></form>;
 }
-function ImageForm({ disabled, onSubmit }: { disabled: boolean; onSubmit: (e: FormEvent<HTMLFormElement>) => void }) { return <form onSubmit={onSubmit} className="mt-3 flex gap-2"><input required disabled={disabled} type="url" name="imagemUrl" placeholder="URL da imagem" className={`${input} min-w-0 flex-1`} /><button disabled={disabled} className="rounded-lg border border-cyan-700 px-3 text-xs font-semibold text-cyan-700">Adicionar</button></form>; }
+function ImageForm({ disabled, onSubmit }: { disabled: boolean; onSubmit: (e: FormEvent<HTMLFormElement>) => void }) { return <form onSubmit={onSubmit} className="mt-3 flex gap-2"><input required disabled={disabled} type="url" name="imagemUrl" placeholder="URL da imagem" className={`${input} min-w-0 flex-1`} /><button disabled={disabled} className="rounded-lg border border-primary px-3 text-xs font-semibold text-primary">Adicionar</button></form>; }
 function body(kind: string, data: FormData) {
   const keys = kind === "curriculos" ? ["nomeExposicao", "instituicao", "cidade", "pais", "data"] : kind === "publicacoes" ? ["titulo", "ano", "autor", "editora", "pagina"] : ["titulo", "descricao", "url"];
   const result = Object.fromEntries(keys.map((key) => { const value = data.get(key); return [key, key === "ano" ? (value ? Number(value) : null) : (typeof value === "string" && value.trim() ? value.trim() : null)]; }));

@@ -43,10 +43,10 @@ export function AppShell({ children }: { children: ReactNode }) {
                 Clientes e projetos
               </Link>
               <Link
-                href="/cadastros"
+                href="/configuracoes"
                 className="rounded-lg px-3 py-2 hover:bg-slate-100"
               >
-                Cadastros auxiliares
+                Configurações
               </Link>
               <Link
                 href="/usuarios"
@@ -59,10 +59,10 @@ export function AppShell({ children }: { children: ReactNode }) {
           {user.papel === "USUARIO" && (
             <nav className="flex flex-1 items-center gap-2 text-sm font-semibold">
               <Link
-                href="/cadastros"
+                href="/configuracoes"
                 className="rounded-lg px-3 py-2 hover:bg-slate-100"
               >
-                Cadastros auxiliares
+                Configurações
               </Link>
             </nav>
           )}

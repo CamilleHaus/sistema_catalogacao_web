@@ -85,7 +85,7 @@ export default function GlobalAdminPage() {
       <AppShell>
         <div className="flex items-end justify-between gap-6">
           <div>
-            <p className="text-sm font-semibold text-cyan-700">Área global</p>
+            <p className="text-sm font-semibold text-primary">Área global</p>
             <h1 className="mt-1 text-3xl font-bold tracking-tight">Visão administrativa</h1>
           </div>
         </div>
@@ -112,7 +112,7 @@ export default function GlobalAdminPage() {
               <button
                 type="submit"
                 disabled={creating}
-                className="w-full rounded-xl bg-cyan-700 px-5 py-3 font-semibold text-white transition hover:bg-cyan-800 disabled:cursor-not-allowed disabled:opacity-60"
+                className="w-full rounded-xl bg-primary px-5 py-3 font-semibold text-white transition hover:bg-primary-800 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {creating ? "Criando..." : "Criar empresa"}
               </button>
@@ -156,7 +156,7 @@ function FormField({ label, ...props }: { label: string } & React.InputHTMLAttri
       <input
         {...props}
         required
-        className="mt-2 w-full rounded-xl border border-slate-200 px-4 py-3 outline-none transition focus:border-cyan-600 focus:ring-2 focus:ring-cyan-100"
+        className="mt-2 w-full rounded-xl border border-slate-200 px-4 py-3 outline-none transition focus:border-primary focus:ring-2 focus:ring-primary-100"
       />
     </label>
   );

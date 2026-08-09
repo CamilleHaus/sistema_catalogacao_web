@@ -46,7 +46,7 @@ export default function ChangePasswordPage() {
   return (
     <AppShell>
       <div className="mx-auto max-w-lg rounded-3xl bg-white p-8 shadow-sm">
-        <p className="text-sm font-semibold text-cyan-700">Primeiro acesso</p>
+        <p className="text-sm font-semibold text-primary">Primeiro acesso</p>
         <h1 className="mt-2 text-3xl font-bold tracking-tight">Crie uma nova senha</h1>
         <p className="mt-3 text-sm leading-6 text-slate-500">
           Antes de continuar, substitua a senha temporária por uma senha pessoal
@@ -61,7 +61,7 @@ export default function ChangePasswordPage() {
               minLength={8}
               autoComplete="new-password"
               required
-              className="mt-2 w-full rounded-xl border border-slate-300 px-4 py-3 outline-none ring-cyan-600 focus:ring-2"
+              className="mt-2 w-full rounded-xl border border-slate-300 px-4 py-3 outline-none ring-primary focus:ring-2"
             />
           </label>
           <label className="block text-sm font-medium">
@@ -72,7 +72,7 @@ export default function ChangePasswordPage() {
               minLength={8}
               autoComplete="new-password"
               required
-              className="mt-2 w-full rounded-xl border border-slate-300 px-4 py-3 outline-none ring-cyan-600 focus:ring-2"
+              className="mt-2 w-full rounded-xl border border-slate-300 px-4 py-3 outline-none ring-primary focus:ring-2"
             />
           </label>
           {error && <p className="text-sm text-rose-700">{error}</p>}

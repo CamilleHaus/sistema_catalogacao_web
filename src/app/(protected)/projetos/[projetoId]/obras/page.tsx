@@ -9,6 +9,8 @@ import { RoleGate } from "@/components/role-gate";
 import { CatalogingForm } from "@/components/cataloging-form";
 import { ResearchForm } from "@/components/research-form";
 import { FinancialForm } from "@/components/financial-form";
+import { WorkMedia } from "@/components/work-media";
+import { ManagementForm } from "@/components/management-form";
 import { apiFetch } from "@/lib/api-client";
 import { useAuthStore } from "@/stores/auth-store";
 import type {
@@ -99,7 +101,7 @@ export default function WorksPage() {
   return (
     <RoleGate allow={["ADMIN_EMPRESA", "USUARIO"]}>
       <AppShell>
-        <p className="text-sm font-semibold text-cyan-700">
+        <p className="text-sm font-semibold text-primary">
           {project?.cliente.nome ?? "Catálogo"}
         </p>
         <h1 className="mt-1 text-3xl font-bold tracking-tight">
@@ -169,7 +171,7 @@ export default function WorksPage() {
               </label>
               <button
                 disabled={saving}
-                className="rounded-xl bg-cyan-700 px-5 py-3 font-semibold text-white disabled:opacity-60 md:col-span-2 xl:col-span-4"
+                className="rounded-xl bg-primary px-5 py-3 font-semibold text-white disabled:opacity-60 md:col-span-2 xl:col-span-4"
               >
                 {saving ? "Salvando..." : "Cadastrar obra"}
               </button>
@@ -202,7 +204,7 @@ export default function WorksPage() {
                       }}
                     />
                   )}
-                  <span className="text-xs font-bold uppercase tracking-wider text-cyan-700">
+                  <span className="text-xs font-bold uppercase tracking-wider text-primary">
                     {work.codigoAcervo}
                   </span>
                   <h3 className="mt-2 text-lg font-bold">
@@ -272,7 +274,7 @@ export default function WorksPage() {
                     </>
                   )}
                   <details className="mt-4 border-t border-slate-100 pt-3">
-                    <summary className="cursor-pointer text-sm font-semibold text-cyan-700">
+                    <summary className="cursor-pointer text-sm font-semibold text-primary">
                       Catalogação
                     </summary>
                     <CatalogingForm
@@ -282,8 +284,16 @@ export default function WorksPage() {
                       onError={setError}
                     />
                   </details>
+                  <WorkMedia
+                    projetoId={projetoId}
+                    obraId={work.id}
+                    canEdit={Boolean(canEdit)}
+                    onChanged={async () => setData(await load())}
+                    onError={setError}
+                  />
+                  <ManagementForm projetoId={projetoId} work={work} locations={data?.[5] ?? []} canEdit={Boolean(canEdit)} onChanged={async () => setData(await load())} onError={setError} />
                   <details className="mt-4 border-t border-slate-100 pt-3">
-                    <summary className="cursor-pointer text-sm font-semibold text-cyan-700">
+                    <summary className="cursor-pointer text-sm font-semibold text-primary">
                       Pesquisa
                     </summary>
                     <ResearchForm
@@ -294,7 +304,7 @@ export default function WorksPage() {
                     />
                   </details>
                   <details className="mt-4 border-t border-slate-100 pt-3">
-                    <summary className="cursor-pointer text-sm font-semibold text-cyan-700">Financeiro</summary>
+                    <summary className="cursor-pointer text-sm font-semibold text-primary">Financeiro</summary>
                     <FinancialForm projetoId={projetoId} obraId={work.id} canEdit={Boolean(canEdit)} onError={setError} />
                   </details>
                 </article>
@@ -391,13 +401,14 @@ function PhotoForm({
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = event.currentTarget;
-    const url = new FormData(form).get("url");
+    const data = new FormData(form);
+    const url = data.get("url");
     setBusy(true);
     onError("");
     try {
       await apiFetch(`/projetos/${projetoId}/obras/${work.id}/foto-principal`, {
         method: "PUT",
-        body: JSON.stringify({ url }),
+        body: JSON.stringify({ url, creditos: optional(data, "creditos") }),
       });
       await onSaved();
     } catch (caught: unknown) {
@@ -422,7 +433,7 @@ function PhotoForm({
   }
   return (
     <details className="mt-4 border-t border-slate-100 pt-3">
-      <summary className="cursor-pointer text-sm font-semibold text-cyan-700">
+      <summary className="cursor-pointer text-sm font-semibold text-primary">
         Foto principal
       </summary>
       <form onSubmit={save} className="mt-3 grid gap-2">
@@ -434,10 +445,17 @@ function PhotoForm({
           placeholder="https://..."
           className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
         />
+        <input
+          name="creditos"
+          maxLength={500}
+          defaultValue={work.fotoPrincipalCreditos ?? ""}
+          placeholder="Créditos (opcional)"
+          className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
+        />
         <div className="flex gap-2">
           <button
             disabled={busy}
-            className="rounded-lg bg-cyan-700 px-3 py-2 text-xs font-semibold text-white"
+            className="rounded-lg bg-primary px-3 py-2 text-xs font-semibold text-white"
           >
             Salvar URL
           </button>
@@ -520,7 +538,7 @@ function DimensionForm({
   }
   return (
     <details className="mt-3 border-t border-slate-100 pt-3">
-      <summary className="cursor-pointer text-sm font-semibold text-cyan-700">
+      <summary className="cursor-pointer text-sm font-semibold text-primary">
         Dimensão {label.toLowerCase()}
       </summary>
       <form onSubmit={save} className="mt-3 grid gap-2">
@@ -586,7 +604,7 @@ function DimensionForm({
         <div className="flex gap-2">
           <button
             disabled={busy}
-            className="rounded-lg bg-cyan-700 px-3 py-2 text-xs font-semibold text-white"
+            className="rounded-lg bg-primary px-3 py-2 text-xs font-semibold text-white"
           >
             Salvar
           </button>

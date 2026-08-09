@@ -180,7 +180,7 @@ export function CatalogingForm({
         {canEdit && (
           <button
             disabled={busy}
-            className="rounded-lg bg-cyan-700 px-3 py-2 text-sm font-semibold text-white"
+            className="rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-white"
           >
             {catalog ? "Salvar catalogação" : "Criar catalogação"}
           </button>
@@ -199,7 +199,7 @@ export function CatalogingForm({
                       {" "}
                       —{" "}
                       <a
-                        className="text-cyan-700 underline"
+                        className="text-primary underline"
                         href={x.imagemUrl}
                         target="_blank"
                       >
@@ -240,7 +240,7 @@ export function CatalogingForm({
                 />
                 <button
                   disabled={busy}
-                  className="rounded-lg border border-cyan-700 px-3 py-2 text-xs font-semibold text-cyan-700"
+                  className="rounded-lg border border-primary px-3 py-2 text-xs font-semibold text-primary"
                 >
                   Adicionar assinatura
                 </button>
@@ -253,7 +253,7 @@ export function CatalogingForm({
               <div key={x.id} className="mt-2 flex justify-between text-sm">
                 <span>
                   <a
-                    className="text-cyan-700 underline"
+                    className="text-primary underline"
                     href={x.imagemUrl}
                     target="_blank"
                   >
@@ -287,7 +287,7 @@ export function CatalogingForm({
                 />
                 <button
                   disabled={busy}
-                  className="rounded-lg border border-cyan-700 px-3 py-2 text-xs font-semibold text-cyan-700"
+                  className="rounded-lg border border-primary px-3 py-2 text-xs font-semibold text-primary"
                 >
                   Adicionar certificado
                 </button>

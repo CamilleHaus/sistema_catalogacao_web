@@ -97,11 +97,27 @@ export interface Work {
   edicao: string | null;
   data: string | null;
   fotoPrincipalUrl: string | null;
+  fotoPrincipalCreditos: string | null;
   status: WorkStatus | null;
   tecnica: Pick<Technique, "id" | "nome" | "projetoId"> | null;
   localizacao: { id: string; nome: string; paiId: string | null } | null;
   artistas: Artist[];
   dimensoes: WorkDimension[];
+}
+
+export interface WorkImage {
+  id: string; imagemUrl: string; creditos: string | null; observacoes: string | null;
+  principal: boolean; criadoEm: string; atualizadoEm: string;
+}
+export interface GallerySignature {
+  id: string; imagemUrl: string; criadoEm: string;
+  localAssinatura: SignatureLocation;
+}
+export interface WorkGallery { imagens: WorkImage[]; assinaturas: GallerySignature[]; }
+export type AttachmentType = "IMAGEM" | "PDF" | "DOCUMENTO" | "PLANILHA" | "APRESENTACAO" | "AUDIO" | "VIDEO" | "OUTRO";
+export interface WorkAttachment {
+  id: string; arquivoUrl: string; tipo: AttachmentType; observacoes: string | null;
+  extensao: string | null; criadoEm: string; atualizadoEm: string;
 }
 
 export interface WorkDimension {
