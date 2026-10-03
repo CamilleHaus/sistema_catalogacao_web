@@ -1,21 +1,35 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
+import { Plus } from "lucide-react";
+import { useEffect, useState, type ReactNode } from "react";
 import { AppShell } from "@/components/app-shell";
 import { EmptyState } from "@/components/empty-state";
 import { PageMessage } from "@/components/page-message";
 import { RoleGate } from "@/components/role-gate";
+import {
+  ArtistRegisterModal,
+  ClientRegisterModal,
+  NameRegisterModal,
+  TagRegisterModal,
+  TechniqueRegisterModal,
+} from "@/components/settings-register-modals";
+import { Badge, Button, ListRow, RowList } from "@/components/ui";
+import { WorkSetRegisterModal } from "@/components/work-set-register-modal";
 import { apiFetch } from "@/lib/api-client";
+import { cn } from "@/lib/cn";
+import { notifySuccess } from "@/lib/toast";
+import { errorMessage } from "@/lib/work";
 import { useAuthStore } from "@/stores/auth-store";
 import type {
   Artist,
   CatalogCategory,
   CatalogTag,
   Client,
+  NamedReference,
   Project,
   SignatureLocation,
-  NamedReference,
   Technique,
+  WorkSet,
   WorkStatus,
 } from "@/types/domain";
 
@@ -30,15 +44,29 @@ type PageData = [
   NamedReference[],
   NamedReference[],
   { estadosConservacao: NamedReference[]; tiposServico: NamedReference[] },
+  WorkSet[],
 ];
 
-type RegisterTab = "clientes" | "artistas" | "status" | "tecnicas" | "categorias" | "tags" | "assinaturas" | "negociacao" | "seguros" | "conservacao" | "servicos";
+type RegisterTab =
+  | "clientes"
+  | "artistas"
+  | "status"
+  | "tecnicas"
+  | "fichasMae"
+  | "categorias"
+  | "tags"
+  | "assinaturas"
+  | "negociacao"
+  | "seguros"
+  | "conservacao"
+  | "servicos";
 
 const registerTabs: { id: RegisterTab; label: string; adminOnly?: boolean }[] = [
   { id: "clientes", label: "Clientes", adminOnly: true },
   { id: "artistas", label: "Artistas" },
   { id: "status", label: "Status" },
   { id: "tecnicas", label: "Técnicas" },
+  { id: "fichasMae", label: "Fichas mãe" },
   { id: "categorias", label: "Categorias" },
   { id: "tags", label: "Tags" },
   { id: "assinaturas", label: "Locais de assinatura" },
@@ -48,12 +76,57 @@ const registerTabs: { id: RegisterTab; label: string; adminOnly?: boolean }[] = 
   { id: "servicos", label: "Tipos de serviço", adminOnly: true },
 ];
 
+type NameOnlyConfig = { path: string; createTitle: string; editTitle: string };
+
+/** Cadastros cuja API só aceita `{ nome }` — uma única forma (`NameRegisterModal`) atende a todos. */
+const NAME_ONLY_TABS: Partial<Record<RegisterTab, NameOnlyConfig>> = {
+  status: { path: "/status-obras", createTitle: "Novo status", editTitle: "Editar status" },
+  categorias: {
+    path: "/categorias-catalogacao",
+    createTitle: "Nova categoria",
+    editTitle: "Editar categoria",
+  },
+  assinaturas: {
+    path: "/locais-assinatura",
+    createTitle: "Novo local de assinatura",
+    editTitle: "Editar local de assinatura",
+  },
+  negociacao: {
+    path: "/formas-negociacao",
+    createTitle: "Nova forma de negociação",
+    editTitle: "Editar forma de negociação",
+  },
+  seguros: {
+    path: "/modalidades-seguro",
+    createTitle: "Nova modalidade de seguro",
+    editTitle: "Editar modalidade de seguro",
+  },
+  conservacao: {
+    path: "/gestao-auxiliares/estados-conservacao",
+    createTitle: "Novo estado de conservação",
+    editTitle: "Editar estado de conservação",
+  },
+  servicos: {
+    path: "/gestao-auxiliares/tipos-servico",
+    createTitle: "Novo tipo de serviço",
+    editTitle: "Editar tipo de serviço",
+  },
+};
+
+type Dialog =
+  | ({ kind: "name"; item: NamedReference | null } & NameOnlyConfig)
+  | { kind: "tag"; item: CatalogTag | null }
+  | { kind: "artist"; item: Artist | null }
+  | { kind: "client"; item: Client | null }
+  | { kind: "technique"; item: Technique | null }
+  | { kind: "workSet"; item: WorkSet | null };
+
 export default function RegistersPage() {
   const user = useAuthStore((state) => state.user);
   const [activeTab, setActiveTab] = useState<RegisterTab>(() =>
     useAuthStore.getState().user?.papel === "ADMIN_EMPRESA" ? "clientes" : "artistas",
   );
-  const [createOpen, setCreateOpen] = useState(false);
+  const [dialog, setDialog] = useState<Dialog | null>(null);
   const [artists, setArtists] = useState<Artist[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
   const [statuses, setStatuses] = useState<WorkStatus[]>([]);
@@ -61,16 +134,13 @@ export default function RegistersPage() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [categories, setCategories] = useState<CatalogCategory[]>([]);
   const [tags, setTags] = useState<CatalogTag[]>([]);
-  const [signatureLocations, setSignatureLocations] = useState<
-    SignatureLocation[]
-  >([]);
+  const [signatureLocations, setSignatureLocations] = useState<SignatureLocation[]>([]);
   const [negotiationForms, setNegotiationForms] = useState<NamedReference[]>([]);
   const [insuranceTypes, setInsuranceTypes] = useState<NamedReference[]>([]);
   const [conservationStates, setConservationStates] = useState<NamedReference[]>([]);
   const [serviceTypes, setServiceTypes] = useState<NamedReference[]>([]);
-  const [message, setMessage] = useState<string | null>(null);
+  const [workSets, setWorkSets] = useState<WorkSet[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const [saving, setSaving] = useState(false);
   const canManageCataloging =
     user?.papel === "ADMIN_EMPRESA" ||
     projects.some((project) => project.permissao === "EDITAR");
@@ -86,7 +156,11 @@ export default function RegistersPage() {
       apiFetch<SignatureLocation[]>("/locais-assinatura"),
       apiFetch<NamedReference[]>("/formas-negociacao"),
       apiFetch<NamedReference[]>("/modalidades-seguro"),
-      apiFetch<{ estadosConservacao: NamedReference[]; tiposServico: NamedReference[] }>("/gestao-auxiliares"),
+      apiFetch<{
+        estadosConservacao: NamedReference[];
+        tiposServico: NamedReference[];
+      }>("/gestao-auxiliares"),
+      apiFetch<WorkSet[]>("/fichas-mae"),
     ]);
   }
 
@@ -102,13 +176,14 @@ export default function RegistersPage() {
     setInsuranceTypes(data[8]);
     setConservationStates(data[9].estadosConservacao);
     setServiceTypes(data[9].tiposServico);
+    setWorkSets(data[10]);
   }
 
   useEffect(() => {
     let active = true;
     load()
       .then((data) => active && apply(data))
-      .catch((caught: unknown) => active && setError(text(caught)));
+      .catch((caught: unknown) => active && setError(errorMessage(caught)));
     return () => {
       active = false;
     };
@@ -119,59 +194,50 @@ export default function RegistersPage() {
     let active = true;
     apiFetch<Client[]>("/clientes")
       .then((data) => active && setClients(data))
-      .catch((caught: unknown) => active && setError(text(caught)));
-    return () => { active = false; };
+      .catch((caught: unknown) => active && setError(errorMessage(caught)));
+    return () => {
+      active = false;
+    };
   }, [user?.papel]);
 
-  useEffect(() => {
-    if (!createOpen) return;
-    function closeOnEscape(event: KeyboardEvent) {
-      if (event.key === "Escape") setCreateOpen(false);
-    }
-    document.addEventListener("keydown", closeOnEscape);
-    return () => document.removeEventListener("keydown", closeOnEscape);
-  }, [createOpen]);
+  async function reload() {
+    apply(await load());
+    if (user?.papel === "ADMIN_EMPRESA") setClients(await apiFetch<Client[]>("/clientes"));
+    notifySuccess("Cadastro salvo.");
+  }
 
-  async function submit(
-    event: FormEvent<HTMLFormElement>,
-    path: string,
-    success: string,
-    body: (data: FormData) => object,
-  ) {
-    event.preventDefault();
-    const form = event.currentTarget;
-    setSaving(true);
+  function openCreate() {
     setError(null);
-    setMessage(null);
-    try {
-      await apiFetch(path, {
-        method: "POST",
-        body: JSON.stringify(body(new FormData(form))),
-      });
-      apply(await load());
-      if (path === "/clientes") setClients(await apiFetch<Client[]>("/clientes"));
-      form.reset();
-      setCreateOpen(false);
-      setMessage(success);
-    } catch (caught: unknown) {
-      setError(text(caught));
-    } finally {
-      setSaving(false);
-    }
+    if (activeTab === "clientes") return setDialog({ kind: "client", item: null });
+    if (activeTab === "artistas") return setDialog({ kind: "artist", item: null });
+    if (activeTab === "tecnicas") return setDialog({ kind: "technique", item: null });
+    if (activeTab === "tags") return setDialog({ kind: "tag", item: null });
+    if (activeTab === "fichasMae") return setDialog({ kind: "workSet", item: null });
+    const config = NAME_ONLY_TABS[activeTab];
+    if (config) setDialog({ kind: "name", item: null, ...config });
   }
-  async function renameAux(path: string, id: string, nome: string) {
-    setSaving(true); setError(null);
-    try { await apiFetch(`${path}/${id}`, { method: "PATCH", body: JSON.stringify({ nome }) }); apply(await load()); }
-    catch (caught: unknown) { setError(text(caught)); } finally { setSaving(false); }
+
+  function closeDialog() {
+    setDialog(null);
   }
+
   const activeLabel = registerTabs.find((tab) => tab.id === activeTab)?.label ?? "Configuração";
-  const canCreate = user?.papel === "ADMIN_EMPRESA" || (canManageCataloging && ["categorias", "tags", "assinaturas", "negociacao", "seguros"].includes(activeTab));
+  const canEdit =
+    user?.papel === "ADMIN_EMPRESA" ||
+    (canManageCataloging &&
+      ["categorias", "tags", "assinaturas", "negociacao", "seguros", "fichasMae"].includes(
+        activeTab,
+      ));
+  // A ficha mãe é do projeto: quem não é admin só edita nos projetos com permissão.
+  const editableProjects = projects.filter(
+    (project) => user?.papel === "ADMIN_EMPRESA" || project.permissao === "EDITAR",
+  );
 
   return (
     <RoleGate allow={["ADMIN_EMPRESA", "USUARIO"]}>
       <AppShell>
         <h1 className="text-3xl font-bold tracking-tight">Configurações</h1>
-        <p className="mt-2 text-sm text-ink-500">
+        <p className="mt-2 text-sm text-muted-foreground">
           Gerencie os valores reutilizáveis nas obras da empresa.
         </p>
         {error && (
@@ -179,362 +245,356 @@ export default function RegistersPage() {
             <PageMessage message={error} />
           </div>
         )}
-        {message && (
-          <div className="mt-6 rounded-xl border border-success-100 bg-success-50 px-4 py-3 text-sm text-success-800">
-            {message}
-          </div>
-        )}
 
         <div className="mt-8 grid items-start gap-8 lg:grid-cols-[240px_minmax(0,1fr)]">
-          <nav aria-label="Tipos de configuração" className="overflow-hidden rounded-2xl border border-ink-200 bg-white p-2 shadow-sm">
-            {registerTabs.filter((tab) => !tab.adminOnly || user?.papel === "ADMIN_EMPRESA").map((tab) => (
-              <button key={tab.id} type="button" onClick={() => { setActiveTab(tab.id); setCreateOpen(false); }} aria-current={activeTab === tab.id ? "page" : undefined} className={`flex w-full rounded-xl px-3 py-2.5 text-left text-sm font-semibold ${activeTab === tab.id ? "bg-primary text-white" : "text-ink-600 hover:bg-ink-100 hover:text-ink-950"}`}>
-                {tab.label}
-              </button>
-            ))}
+          <nav
+            aria-label="Tipos de configuração"
+            className="overflow-hidden rounded-2xl border border-border bg-surface p-2 shadow-sm"
+          >
+            {registerTabs
+              .filter((tab) => !tab.adminOnly || user?.papel === "ADMIN_EMPRESA")
+              .map((tab) => (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => {
+                    setActiveTab(tab.id);
+                    setDialog(null);
+                  }}
+                  aria-current={activeTab === tab.id ? "page" : undefined}
+                  className={cn(
+                    "flex w-full rounded-xl px-3 py-2.5 text-left text-sm font-semibold",
+                    activeTab === tab.id
+                      ? "bg-primary text-white"
+                      : "text-ink-600 hover:bg-ink-100 hover:text-ink-950",
+                  )}
+                >
+                  {tab.label}
+                </button>
+              ))}
           </nav>
 
-          <div className="min-w-0 rounded-2xl border border-ink-200 bg-white p-6 shadow-sm">
+          <div className="min-w-0 rounded-2xl border border-border bg-surface p-6 shadow-sm">
             <div className="flex items-center justify-between gap-4">
               <h2 className="text-2xl font-bold">{activeLabel}</h2>
-              {canCreate && <button type="button" onClick={() => setCreateOpen(true)} className="shrink-0 rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-white hover:bg-primary-800">Novo cadastro</button>}
+              {canEdit && (
+                <Button icon={<Plus className="size-4" />} onClick={openCreate}>
+                  Novo cadastro
+                </Button>
+              )}
             </div>
 
-        {createOpen && <Modal title={activeLabel} onClose={() => setCreateOpen(false)}>
-        {activeTab === "clientes" && user?.papel === "ADMIN_EMPRESA" && <Card title="Novo cliente"><form className="grid gap-3" onSubmit={(event) => submit(event, "/clientes", "Cliente criado.", (data) => ({ nome: data.get("nome"), codigo: data.get("codigo"), descricao: value(data, "descricao") }))}><Field name="nome" label="Nome" required minLength={2} maxLength={150}/><Field name="codigo" label="Código" required maxLength={50} placeholder="Ex.: MAR"/><label className="grid gap-2 text-sm font-medium">Descrição opcional<textarea name="descricao" maxLength={1000} className="min-h-24 rounded-xl border border-ink-300 px-3 py-2 outline-none focus:border-primary"/></label><Button saving={saving}>Cadastrar cliente</Button></form></Card>}
+            <div className="mt-6">
+              {activeTab === "clientes" && user?.papel === "ADMIN_EMPRESA" && (
+                <RegisterRowList empty="Nenhum cliente cadastrado.">
+                  {clients.map((client) => (
+                    <ListRow
+                      key={client.id}
+                      title={
+                        <span className="flex flex-wrap items-center gap-2">
+                          {client.nome}
+                          <Badge tone="brand">{client.codigo}</Badge>
+                        </span>
+                      }
+                      detail={client.descricao || "Sem descrição"}
+                      meta={
+                        <span className="text-xs font-semibold text-muted-foreground">
+                          {client._count?.projetos ?? 0} projetos
+                        </span>
+                      }
+                      onEdit={() => setDialog({ kind: "client", item: client })}
+                    />
+                  ))}
+                </RegisterRowList>
+              )}
 
-        {user?.papel === "ADMIN_EMPRESA" && (
-          <div className="mt-6">
-            {activeTab === "artistas" && <Card title="Novo artista">
-              <form
-                className="grid gap-3"
-                onSubmit={(event) =>
-                  submit(event, "/artistas", "Artista criado.", (data) => ({
-                    nome: data.get("nome"),
-                    localNascimento: value(data, "localNascimento"),
-                    anoNascimento: numberValue(data, "anoNascimento"),
-                    localFalecimento: value(data, "localFalecimento"),
-                    anoFalecimento: numberValue(data, "anoFalecimento"),
-                  }))
-                }
-              >
-                <Field name="nome" label="Nome" required />
-                <Field name="localNascimento" label="Local de nascimento" />
-                <Field
-                  name="anoNascimento"
-                  label="Ano de nascimento"
-                  type="number"
-                  min={0}
-                  max={9999}
-                />
-                <Field name="localFalecimento" label="Local de falecimento" />
-                <Field
-                  name="anoFalecimento"
-                  label="Ano de falecimento"
-                  type="number"
-                  min={0}
-                  max={9999}
-                />
-                <Button saving={saving}>Cadastrar artista</Button>
-              </form>
-            </Card>}
-            {activeTab === "status" && <Card title="Novo status">
-              <form
-                className="grid gap-3"
-                onSubmit={(event) =>
-                  submit(event, "/status-obras", "Status criado.", (data) => ({
-                    nome: data.get("nome"),
-                  }))
-                }
-              >
-                <Field name="nome" label="Nome" required />
-                <Button saving={saving}>Cadastrar status</Button>
-              </form>
-            </Card>}
-            {activeTab === "tecnicas" && <Card title="Nova técnica">
-              <form
-                className="grid gap-3"
-                onSubmit={(event) =>
-                  submit(event, "/tecnicas", "Técnica criada.", (data) => ({
-                    nome: data.get("nome"),
-                    projetoId: value(data, "projetoId"),
-                  }))
-                }
-              >
-                <Field name="nome" label="Nome" required />
-                <label className="grid gap-2 text-sm font-medium">
-                  Escopo
-                  <select
-                    name="projetoId"
-                    className="rounded-xl border border-ink-300 bg-white px-3 py-2"
-                  >
-                    <option value="">Geral da empresa</option>
-                    {projects.map((project) => (
-                      <option key={project.id} value={project.id}>
-                        Projeto: {project.nome}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <Button saving={saving}>Cadastrar técnica</Button>
-              </form>
-            </Card>}
-          </div>
-        )}
+              {activeTab === "artistas" && (
+                <RegisterRowList empty="Nenhum artista cadastrado.">
+                  {artists.map((artist) => (
+                    <ListRow
+                      key={artist.id}
+                      title={artist.nome}
+                      detail={
+                        [artist.localNascimento, artist.anoNascimento]
+                          .filter(Boolean)
+                          .join(", ") || "Dados biográficos não informados"
+                      }
+                      onEdit={
+                        user?.papel === "ADMIN_EMPRESA"
+                          ? () => setDialog({ kind: "artist", item: artist })
+                          : undefined
+                      }
+                    />
+                  ))}
+                </RegisterRowList>
+              )}
 
-        {canManageCataloging && (
-          <div className="mt-6">
-            {activeTab === "categorias" && <Card title="Nova categoria de catalogação">
-              <form
-                className="grid gap-3"
-                onSubmit={(event) =>
-                  submit(
-                    event,
-                    "/categorias-catalogacao",
-                    "Categoria criada.",
-                    (data) => ({ nome: data.get("nome") }),
-                  )
-                }
-              >
-                <Field name="nome" label="Nome" required maxLength={150} />
-                <Button saving={saving}>Cadastrar categoria</Button>
-              </form>
-            </Card>}
-            {activeTab === "tags" && <Card title="Nova tag">
-              <form
-                className="grid gap-3"
-                onSubmit={(event) =>
-                  submit(event, "/tags", "Tag criada.", (data) => ({
-                    nome: data.get("nome"),
-                    cor: value(data, "cor"),
-                  }))
-                }
-              >
-                <Field name="nome" label="Nome" required maxLength={150} />
-                <Field
-                  name="cor"
-                  label="Cor hexadecimal (opcional)"
-                  placeholder="#3B82F6"
-                  pattern="#[0-9A-Fa-f]{6}"
-                />
-                <Button saving={saving}>Cadastrar tag</Button>
-              </form>
-            </Card>}
-            {activeTab === "assinaturas" && <Card title="Novo local de assinatura">
-              <form
-                className="grid gap-3"
-                onSubmit={(event) =>
-                  submit(
-                    event,
-                    "/locais-assinatura",
-                    "Local de assinatura criado.",
-                    (data) => ({ nome: data.get("nome") }),
-                  )
-                }
-              >
-                <Field name="nome" label="Nome" required maxLength={150} />
-                <Button saving={saving}>Cadastrar local</Button>
-              </form>
-            </Card>}
-          </div>
-        )}
-        {canManageCataloging && (
-          <div className="mt-6">
-            {activeTab === "negociacao" && <Card title="Nova forma de negociação"><form className="grid gap-3" onSubmit={(event) => submit(event, "/formas-negociacao", "Forma de negociação criada.", (data) => ({ nome: data.get("nome") }))}><Field name="nome" label="Nome" required maxLength={150}/><Button saving={saving}>Cadastrar forma</Button></form></Card>}
-            {activeTab === "seguros" && <Card title="Nova modalidade de seguro"><form className="grid gap-3" onSubmit={(event) => submit(event, "/modalidades-seguro", "Modalidade de seguro criada.", (data) => ({ nome: data.get("nome") }))}><Field name="nome" label="Nome" required maxLength={150}/><Button saving={saving}>Cadastrar modalidade</Button></form></Card>}
-          </div>
-        )}
-        {user?.papel === "ADMIN_EMPRESA" && <div className="mt-6">{activeTab === "conservacao" && <Card title="Novo estado de conservação"><form className="grid gap-3" onSubmit={e=>submit(e,"/gestao-auxiliares/estados-conservacao","Estado criado.",d=>({nome:d.get("nome")}))}><Field name="nome" label="Nome" required/><Button saving={saving}>Cadastrar estado</Button></form></Card>}{activeTab === "servicos" && <Card title="Novo tipo de serviço"><form className="grid gap-3" onSubmit={e=>submit(e,"/gestao-auxiliares/tipos-servico","Tipo criado.",d=>({nome:d.get("nome")}))}><Field name="nome" label="Nome" required/><Button saving={saving}>Cadastrar tipo</Button></form></Card>}</div>}
-        </Modal>}
+              {activeTab === "status" && (
+                <RegisterRowList empty="Nenhum status cadastrado.">
+                  {statuses.map((status) => (
+                    <ListRow
+                      key={status.id}
+                      title={status.nome}
+                      onEdit={
+                        user?.papel === "ADMIN_EMPRESA"
+                          ? () =>
+                              setDialog({ kind: "name", item: status, ...NAME_ONLY_TABS.status! })
+                          : undefined
+                      }
+                    />
+                  ))}
+                </RegisterRowList>
+              )}
 
-        {user?.papel === "ADMIN_EMPRESA" && activeTab === "clientes" && (
-          <section className="mt-10">
-            <div className="grid gap-3">
-              {clients.length === 0 ? <EmptyState>Nenhum cliente cadastrado.</EmptyState> : clients.map((client) => (
-                <article key={client.id} className="flex flex-col justify-between gap-3 rounded-xl bg-white p-4 shadow-sm sm:flex-row sm:items-center">
-                  <div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <h3 className="font-semibold">{client.nome}</h3>
-                      <span className="rounded-sm bg-primary-50 px-2 py-1 text-xs font-bold text-primary-800">{client.codigo}</span>
-                    </div>
-                    <p className="mt-1 text-sm text-ink-500">{client.descricao || "Sem descrição"}</p>
-                  </div>
-                  <p className="shrink-0 text-xs font-semibold text-ink-500">{client._count?.projetos ?? 0} projetos</p>
-                </article>
-              ))}
+              {activeTab === "tecnicas" && (
+                <RegisterRowList empty="Nenhuma técnica cadastrada.">
+                  {techniques.map((technique) => (
+                    <ListRow
+                      key={technique.id}
+                      title={technique.nome}
+                      detail={
+                        technique.projeto ? `Projeto: ${technique.projeto.nome}` : "Geral da empresa"
+                      }
+                      onEdit={
+                        user?.papel === "ADMIN_EMPRESA"
+                          ? () => setDialog({ kind: "technique", item: technique })
+                          : undefined
+                      }
+                    />
+                  ))}
+                </RegisterRowList>
+              )}
+
+              {activeTab === "fichasMae" && (
+                <RegisterRowList empty="Nenhuma ficha mãe cadastrada.">
+                  {workSets.map((item) => (
+                    <ListRow
+                      key={item.id}
+                      title={
+                        <span className="flex min-w-0 items-center gap-2">
+                          <Badge tone="brand">{item.codigo}</Badge>
+                          <span className="line-clamp-1">{item.descricao}</span>
+                        </span>
+                      }
+                      detail={`Projeto: ${item.projeto.nome}`}
+                      meta={
+                        <span className="text-xs font-semibold text-muted-foreground">
+                          {item.totalObras} {item.totalObras === 1 ? "obra" : "obras"}
+                        </span>
+                      }
+                      onEdit={
+                        editableProjects.some((project) => project.id === item.projetoId)
+                          ? () => setDialog({ kind: "workSet", item })
+                          : undefined
+                      }
+                    />
+                  ))}
+                </RegisterRowList>
+              )}
+
+              {activeTab === "categorias" && (
+                <RegisterRowList empty="Nenhuma categoria cadastrada.">
+                  {categories.map((category) => (
+                    <ListRow
+                      key={category.id}
+                      title={category.nome}
+                      onEdit={
+                        canEdit
+                          ? () =>
+                              setDialog({
+                                kind: "name",
+                                item: category,
+                                ...NAME_ONLY_TABS.categorias!,
+                              })
+                          : undefined
+                      }
+                    />
+                  ))}
+                </RegisterRowList>
+              )}
+
+              {activeTab === "tags" && (
+                <RegisterRowList empty="Nenhuma tag cadastrada.">
+                  {tags.map((tag) => (
+                    <ListRow
+                      key={tag.id}
+                      leading={<TagDot color={tag.cor} />}
+                      title={tag.nome}
+                      detail={tag.cor ? undefined : "Sem cor"}
+                      onEdit={canEdit ? () => setDialog({ kind: "tag", item: tag }) : undefined}
+                    />
+                  ))}
+                </RegisterRowList>
+              )}
+
+              {activeTab === "assinaturas" && (
+                <RegisterRowList empty="Nenhum local cadastrado.">
+                  {signatureLocations.map((location) => (
+                    <ListRow
+                      key={location.id}
+                      title={location.nome}
+                      onEdit={
+                        canEdit
+                          ? () =>
+                              setDialog({
+                                kind: "name",
+                                item: location,
+                                ...NAME_ONLY_TABS.assinaturas!,
+                              })
+                          : undefined
+                      }
+                    />
+                  ))}
+                </RegisterRowList>
+              )}
+
+              {activeTab === "negociacao" && (
+                <RegisterRowList empty="Nenhuma forma cadastrada.">
+                  {negotiationForms.map((item) => (
+                    <ListRow
+                      key={item.id}
+                      title={item.nome}
+                      onEdit={
+                        canEdit
+                          ? () =>
+                              setDialog({
+                                kind: "name",
+                                item,
+                                ...NAME_ONLY_TABS.negociacao!,
+                              })
+                          : undefined
+                      }
+                    />
+                  ))}
+                </RegisterRowList>
+              )}
+
+              {activeTab === "seguros" && (
+                <RegisterRowList empty="Nenhuma modalidade cadastrada.">
+                  {insuranceTypes.map((item) => (
+                    <ListRow
+                      key={item.id}
+                      title={item.nome}
+                      onEdit={
+                        canEdit
+                          ? () =>
+                              setDialog({
+                                kind: "name",
+                                item,
+                                ...NAME_ONLY_TABS.seguros!,
+                              })
+                          : undefined
+                      }
+                    />
+                  ))}
+                </RegisterRowList>
+              )}
+
+              {activeTab === "conservacao" && (
+                <RegisterRowList empty="Nenhum estado cadastrado.">
+                  {conservationStates.map((item) => (
+                    <ListRow
+                      key={item.id}
+                      title={item.nome}
+                      onEdit={
+                        user?.papel === "ADMIN_EMPRESA"
+                          ? () =>
+                              setDialog({
+                                kind: "name",
+                                item,
+                                ...NAME_ONLY_TABS.conservacao!,
+                              })
+                          : undefined
+                      }
+                    />
+                  ))}
+                </RegisterRowList>
+              )}
+
+              {activeTab === "servicos" && (
+                <RegisterRowList empty="Nenhum tipo cadastrado.">
+                  {serviceTypes.map((item) => (
+                    <ListRow
+                      key={item.id}
+                      title={item.nome}
+                      onEdit={
+                        user?.papel === "ADMIN_EMPRESA"
+                          ? () =>
+                              setDialog({
+                                kind: "name",
+                                item,
+                                ...NAME_ONLY_TABS.servicos!,
+                              })
+                          : undefined
+                      }
+                    />
+                  ))}
+                </RegisterRowList>
+              )}
             </div>
-          </section>
-        )}
-
-        <div className="mt-10 grid gap-8 xl:grid-cols-3">
-          {activeTab === "artistas" && <List
-            title="Artistas"
-            empty="Nenhum artista cadastrado."
-            items={artists.map((artist) => ({
-              id: artist.id,
-              title: artist.nome,
-              detail:
-                [artist.localNascimento, artist.anoNascimento]
-                  .filter(Boolean)
-                  .join(", ") || "Dados biográficos não informados",
-            }))}
-          />}
-          {activeTab === "status" && <List
-            title="Status"
-            empty="Nenhum status cadastrado."
-            items={statuses.map((status) => ({
-              id: status.id,
-              title: status.nome,
-            }))}
-          />}
-          {activeTab === "tecnicas" && <List
-            title="Técnicas"
-            empty="Nenhuma técnica cadastrada."
-            items={techniques.map((technique) => ({
-              id: technique.id,
-              title: technique.nome,
-              detail: technique.projeto
-                ? `Projeto: ${technique.projeto.nome}`
-                : "Geral da empresa",
-            }))}
-          />}
-        </div>
-        <div className="mt-10 grid gap-8 xl:grid-cols-2">{activeTab === "negociacao" && <List title="Formas de negociação" empty="Nenhuma forma cadastrada." items={negotiationForms.map((item) => ({ id: item.id, title: item.nome }))}/>} {activeTab === "seguros" && <List title="Modalidades de seguro" empty="Nenhuma modalidade cadastrada." items={insuranceTypes.map((item) => ({ id: item.id, title: item.nome }))}/>}</div>
-        <div className="mt-10 grid gap-8 xl:grid-cols-2">{activeTab === "conservacao" && <EditableAux title="Estados de conservação" items={conservationStates} canEdit={user?.papel==="ADMIN_EMPRESA"} saving={saving} rename={(id,nome)=>renameAux("/gestao-auxiliares/estados-conservacao",id,nome)}/>} {activeTab === "servicos" && <EditableAux title="Tipos de serviço" items={serviceTypes} canEdit={user?.papel==="ADMIN_EMPRESA"} saving={saving} rename={(id,nome)=>renameAux("/gestao-auxiliares/tipos-servico",id,nome)}/>}</div>
-        <div className="mt-10 grid gap-8 xl:grid-cols-3">
-          {activeTab === "categorias" && <List
-            title="Categorias de catalogação"
-            empty="Nenhuma categoria cadastrada."
-            items={categories.map((item) => ({
-              id: item.id,
-              title: item.nome,
-            }))}
-          />}
-          {activeTab === "tags" && <List
-            title="Tags"
-            empty="Nenhuma tag cadastrada."
-            items={tags.map((item) => ({
-              id: item.id,
-              title: item.nome,
-              detail: item.cor ?? "Sem cor",
-            }))}
-          />}
-          {activeTab === "assinaturas" && <List
-            title="Locais de assinatura"
-            empty="Nenhum local cadastrado."
-            items={signatureLocations.map((item) => ({
-              id: item.id,
-              title: item.nome,
-            }))}
-          />}
-        </div>
           </div>
         </div>
+
+        {dialog?.kind === "name" && (
+          <NameRegisterModal
+            path={dialog.path}
+            createTitle={dialog.createTitle}
+            editTitle={dialog.editTitle}
+            item={dialog.item}
+            onClose={closeDialog}
+            onSaved={reload}
+          />
+        )}
+        {dialog?.kind === "tag" && (
+          <TagRegisterModal item={dialog.item} onClose={closeDialog} onSaved={reload} />
+        )}
+        {dialog?.kind === "artist" && (
+          <ArtistRegisterModal item={dialog.item} onClose={closeDialog} onSaved={reload} />
+        )}
+        {dialog?.kind === "client" && (
+          <ClientRegisterModal item={dialog.item} onClose={closeDialog} onSaved={reload} />
+        )}
+        {dialog?.kind === "technique" && (
+          <TechniqueRegisterModal
+            item={dialog.item}
+            projects={projects}
+            onClose={closeDialog}
+            onSaved={reload}
+          />
+        )}
+        {dialog?.kind === "workSet" && (
+          <WorkSetRegisterModal
+            item={dialog.item}
+            projects={editableProjects}
+            onClose={closeDialog}
+            onSaved={reload}
+          />
+        )}
       </AppShell>
     </RoleGate>
   );
 }
 
-function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
-  return (
-    <div className="fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-ink-950/60 p-4" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
-      <section role="dialog" aria-modal="true" aria-labelledby="configuration-modal-title" className="w-full max-w-xl rounded-2xl bg-white p-6 shadow-2xl">
-        <div className="flex items-start justify-between gap-4">
-          <h2 id="configuration-modal-title" className="text-xl font-bold">{title}</h2>
-          <button type="button" onClick={onClose} aria-label="Fechar modal" className="grid size-9 shrink-0 place-items-center rounded-lg text-xl text-ink-500 hover:bg-ink-100">×</button>
-        </div>
-        <div className="mt-2">{children}</div>
-      </section>
-    </div>
-  );
+function RegisterRowList({
+  empty,
+  children,
+}: {
+  empty: string;
+  children: ReactNode[];
+}) {
+  if (children.length === 0) return <EmptyState>{empty}</EmptyState>;
+  return <RowList>{children}</RowList>;
 }
 
-function text(error: unknown) {
-  return error instanceof Error
-    ? error.message
-    : "Não foi possível concluir a operação.";
-}
-function value(data: FormData, name: string) {
-  const item = data.get(name);
-  return typeof item === "string" && item ? item : undefined;
-}
-function numberValue(data: FormData, name: string) {
-  const item = value(data, name);
-  return item ? Number(item) : undefined;
-}
-function Card({
-  children,
-}: {
-  title: string;
-  children: React.ReactNode;
-}) {
+function TagDot({ color }: { color: string | null }) {
   return (
-    <section className="w-full">{children}</section>
+    <span
+      aria-hidden
+      className={cn(
+        "size-3 shrink-0 rounded-full",
+        !color && "border border-dashed border-border-strong",
+      )}
+      style={color ? { backgroundColor: color } : undefined}
+    />
   );
 }
-function Field({
-  label,
-  name,
-  ...props
-}: React.InputHTMLAttributes<HTMLInputElement> & {
-  label: string;
-  name: string;
-}) {
-  return (
-    <label className="grid gap-2 text-sm font-medium">
-      {label}
-      <input
-        name={name}
-        className="rounded-xl border border-ink-300 px-3 py-2 outline-none focus:border-primary"
-        {...props}
-      />
-    </label>
-  );
-}
-function Button({
-  saving,
-  children,
-}: {
-  saving: boolean;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      disabled={saving}
-      className="mt-2 rounded-xl bg-primary px-4 py-3 font-semibold text-white disabled:opacity-60"
-    >
-      {saving ? "Salvando..." : children}
-    </button>
-  );
-}
-function List({
-  empty,
-  items,
-}: {
-  title: string;
-  empty: string;
-  items: { id: string; title: string; detail?: string }[];
-}) {
-  return (
-    <section>
-      <div className="grid gap-3">
-        {items.length === 0 ? (
-          <EmptyState>{empty}</EmptyState>
-        ) : (
-          items.map((item) => (
-            <article
-              key={item.id}
-              className="rounded-xl bg-white p-4 shadow-sm"
-            >
-              <h3 className="font-semibold">{item.title}</h3>
-              {item.detail && (
-                <p className="mt-1 text-sm text-ink-500">{item.detail}</p>
-              )}
-            </article>
-          ))
-        )}
-      </div>
-    </section>
-  );
-}
-function EditableAux({items,canEdit,saving,rename}:{title:string;items:NamedReference[];canEdit:boolean;saving:boolean;rename:(id:string,nome:string)=>Promise<void>}) { return <section><div className="grid gap-3">{items.length===0?<EmptyState>Nenhum cadastro.</EmptyState>:items.map(x=><article key={x.id} className="rounded-xl border border-ink-100 bg-white p-4">{canEdit?<form onSubmit={e=>{e.preventDefault();const nome=new FormData(e.currentTarget).get("nome");if(typeof nome==="string")void rename(x.id,nome)}} className="flex gap-2"><input name="nome" defaultValue={x.nome} required className="min-w-0 flex-1 rounded-lg border px-3 py-2"/><button disabled={saving} className="rounded-lg border px-3 text-xs font-semibold">Salvar</button></form>:<h3 className="font-semibold">{x.nome}</h3>}</article>)}</div></section> }

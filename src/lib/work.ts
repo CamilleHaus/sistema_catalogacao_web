@@ -27,11 +27,31 @@ export function flattenLocations(
   ]);
 }
 
-export function formatDimension(dimension: WorkDimension) {
-  if (dimension.formato === "VARIAVEL") return dimension.descricaoVariavel ?? "";
+export function formatDimension(
+  dimension: Pick<
+    WorkDimension,
+    | "formato"
+    | "altura"
+    | "largura"
+    | "profundidade"
+    | "unidade"
+    | "descricaoVariavel"
+  >,
+) {
+  if (dimension.formato === "VARIAVEL")
+    return dimension.descricaoVariavel ?? "";
   const depth =
     dimension.profundidade === null ? "" : ` × ${dimension.profundidade}`;
   return `${dimension.altura} × ${dimension.largura}${depth} ${dimension.unidade?.toLowerCase() ?? ""}`.trim();
+}
+
+/** Título como aparece no cabeçalho e nos cards: com a série, quando houver. */
+export function workTitle(
+  work: Pick<Work, "tituloExibicao" | "serie" | "tituloSerie">,
+) {
+  return work.serie
+    ? `${work.tituloExibicao}, série ${work.tituloSerie}`
+    : work.tituloExibicao;
 }
 
 export const DIMENSION_LABEL = {

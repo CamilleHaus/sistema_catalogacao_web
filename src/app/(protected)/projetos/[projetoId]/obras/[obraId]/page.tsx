@@ -1,12 +1,13 @@
 "use client";
 
 import {
-  BookOpen,
   ClipboardList,
   Images,
   Landmark,
   Microscope,
   Pencil,
+  Settings2,
+  ShieldCheck,
 } from "lucide-react";
 import { useParams } from "next/navigation";
 import { useCallback, useEffect, useState, type ReactNode } from "react";
@@ -30,7 +31,7 @@ import {
   type TabItem,
 } from "@/components/ui";
 import { apiFetch } from "@/lib/api-client";
-import { errorMessage } from "@/lib/work";
+import { errorMessage, workTitle } from "@/lib/work";
 import { useAuthStore } from "@/stores/auth-store";
 import type {
   Artist,
@@ -134,12 +135,31 @@ export default function WorkDetailPage() {
           ),
         },
         {
-          id: "gestao",
-          label: "Gestão",
-          icon: BookOpen,
+          id: "conservacao",
+          label: "Conservação",
+          icon: ShieldCheck,
           content: (
             <Panel>
               <ManagementForm
+                kinds={["analises", "restauros"]}
+                projetoId={projetoId}
+                work={data.work}
+                locations={data.locations}
+                canEdit={Boolean(canEdit)}
+                onChanged={refresh}
+                onError={report}
+              />
+            </Panel>
+          ),
+        },
+        {
+          id: "controle",
+          label: "Controle",
+          icon: Settings2,
+          content: (
+            <Panel>
+              <ManagementForm
+                kinds={["servicos", "instrucoes", "movimentacoes"]}
                 projetoId={projetoId}
                 work={data.work}
                 locations={data.locations}
@@ -192,23 +212,24 @@ export default function WorkDetailPage() {
             data ? `Obras de ${data.project.nome}` : "Voltar ao acervo"
           }
           eyebrow={work?.codigoAcervo}
-          title={work?.tituloExibicao ?? "Carregando..."}
+          title={work ? workTitle(work) : "Carregando..."}
           description={
             work?.artistas.map((artist) => artist.nome).join(", ") || undefined
           }
           actions={
-            work && (
-              <div className="flex flex-wrap items-center gap-1.5">
-                {work.status && <Badge tone="brand">{work.status.nome}</Badge>}
-                {work.tecnica && (
-                  <Badge tone="outline">{work.tecnica.nome}</Badge>
-                )}
-                {work.localizacao && (
-                  <Badge tone="neutral">{work.localizacao.nome}</Badge>
-                )}
-                {!canEdit && <Badge tone="warning">Somente leitura</Badge>}
-              </div>
-            )
+            work &&
+            (canEdit ? (
+              <Button
+                size="sm"
+                variant="secondary"
+                icon={<Pencil className="size-4" />}
+                onClick={() => setEditing(true)}
+              >
+                Editar ficha
+              </Button>
+            ) : (
+              <Badge tone="warning">Somente leitura</Badge>
+            ))
           }
         />
 
@@ -227,22 +248,7 @@ export default function WorkDetailPage() {
           <>
             {/* Linha 1 — ficha técnica ocupando a largura inteira. */}
             <section className="mt-8">
-              <div className="flex items-center justify-between gap-4">
-                <h2 className="text-xs font-semibold tracking-wider text-primary-700 uppercase">
-                  Ficha técnica
-                </h2>
-                {canEdit && (
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    icon={<Pencil className="size-4" />}
-                    onClick={() => setEditing(true)}
-                  >
-                    Editar ficha
-                  </Button>
-                )}
-              </div>
-              <div className="mt-3 grid gap-4 lg:grid-cols-[20rem_minmax(0,1fr)]">
+              <div className="grid gap-4 lg:grid-cols-[20rem_minmax(0,1fr)]">
                 <WorkPhoto
                   projetoId={projetoId}
                   work={data.work}

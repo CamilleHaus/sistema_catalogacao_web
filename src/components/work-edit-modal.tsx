@@ -1,13 +1,25 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
-import { Button, Input, Modal, MultiSelect, Select } from "@/components/ui";
+import { useEffect, useState, type FormEvent } from "react";
+import {
+  DimensionFields,
+  dimensionBody,
+  dimensionProblem,
+  type DimensionMode,
+} from "@/components/dimension-fields";
+import {
+  Button,
+  Checkbox,
+  Input,
+  Modal,
+  MultiSelect,
+  Select,
+} from "@/components/ui";
 import { apiFetch } from "@/lib/api-client";
 import {
   DIMENSION_LABEL,
   errorMessage,
   flattenLocations,
-  formatDimension,
   optionalNumber,
 } from "@/lib/work";
 import type {
@@ -16,21 +28,13 @@ import type {
   Technique,
   Work,
   WorkDimension,
+  WorkSet,
   WorkStatus,
 } from "@/types/domain";
 
 const FORM_ID = "editar-ficha-tecnica";
 type Tipo = WorkDimension["tipo"];
 const TIPOS: Tipo[] = ["SEM_MOLDURA", "COM_MOLDURA"];
-
-/** "none" apaga a dimensão; os outros dois definem o formato enviado. */
-type Mode = "none" | "NUMERICA" | "VARIAVEL";
-
-const MODE_OPTIONS = [
-  { value: "none", label: "Não informada" },
-  { value: "NUMERICA", label: "Numérica" },
-  { value: "VARIAVEL", label: "Variável" },
-];
 
 function nullable(form: FormData, key: string) {
   const value = form.get(key);
@@ -58,8 +62,7 @@ export function WorkEditModal({
 }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [shown, setShown] = useState<Tipo>("SEM_MOLDURA");
-  const [modes, setModes] = useState<Record<Tipo, Mode>>(() => ({
+  const [modes, setModes] = useState<Record<Tipo, DimensionMode>>(() => ({
     SEM_MOLDURA:
       work.dimensoes.find((item) => item.tipo === "SEM_MOLDURA")?.formato ??
       "none",
@@ -68,25 +71,26 @@ export function WorkEditModal({
       "none",
   }));
 
+  const [emConjunto, setEmConjunto] = useState(work.fichaMae !== null);
+  const [fichaMaeId, setFichaMaeId] = useState(work.fichaMae?.id ?? "");
+  const [fichasMae, setFichasMae] = useState<WorkSet[] | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    apiFetch<WorkSet[]>(`/fichas-mae?projetoId=${projetoId}`)
+      .then((items) => active && setFichasMae(items))
+      .catch((caught: unknown) => active && setError(errorMessage(caught)));
+    return () => {
+      active = false;
+    };
+  }, [projetoId]);
+
   const locations = flattenLocations(locationTree);
 
-  /**
-   * Os dois blocos ficam montados (só um é visível), então o `required` do
-   * HTML não pode ser usado no bloco escondido — o navegador se recusa a
-   * submeter apontando para um campo que ninguém vê. A checagem é feita aqui.
-   */
   function findIncomplete(form: FormData) {
     for (const tipo of TIPOS) {
-      const mode = modes[tipo];
-      if (mode === "VARIAVEL" && !nullable(form, `${tipo}-descricaoVariavel`)) {
-        return { tipo, message: "informe a descrição da dimensão variável" };
-      }
-      if (
-        mode === "NUMERICA" &&
-        (!nullable(form, `${tipo}-altura`) || !nullable(form, `${tipo}-largura`))
-      ) {
-        return { tipo, message: "altura e largura são obrigatórias" };
-      }
+      const message = dimensionProblem(form, tipo, modes[tipo]);
+      if (message) return { tipo, message };
     }
     return null;
   }
@@ -97,7 +101,6 @@ export function WorkEditModal({
 
     const incomplete = findIncomplete(form);
     if (incomplete) {
-      setShown(incomplete.tipo);
       setError(
         `Dimensão ${DIMENSION_LABEL[incomplete.tipo].toLowerCase()}: ${incomplete.message}.`,
       );
@@ -115,6 +118,9 @@ export function WorkEditModal({
           titulo: nullable(form, "titulo"),
           edicao: nullable(form, "edicao"),
           data: nullable(form, "data"),
+          tituloSerie: nullable(form, "tituloSerie"),
+          quantidadePartes: optionalNumber(form, "quantidadePartes") ?? null,
+          fichaMaeId: emConjunto ? fichaMaeId || null : null,
           statusId: nullable(form, "statusId"),
           tecnicaId: nullable(form, "tecnicaId"),
           localizacaoId: nullable(form, "localizacaoId"),
@@ -134,18 +140,10 @@ export function WorkEditModal({
           continue;
         }
 
-        // A API rejeita medidas numéricas e descrição variável no mesmo envio.
-        const body =
-          mode === "VARIAVEL"
-            ? { descricaoVariavel: nullable(form, `${tipo}-descricaoVariavel`) }
-            : {
-                altura: optionalNumber(form, `${tipo}-altura`),
-                largura: optionalNumber(form, `${tipo}-largura`),
-                profundidade: optionalNumber(form, `${tipo}-profundidade`),
-                unidade: form.get(`${tipo}-unidade`),
-              };
-
-        await apiFetch(path, { method: "PUT", body: JSON.stringify(body) });
+        await apiFetch(path, {
+          method: "PUT",
+          body: JSON.stringify(dimensionBody(form, tipo, mode)),
+        });
       }
 
       await onSaved();
@@ -156,9 +154,6 @@ export function WorkEditModal({
       setBusy(false);
     }
   }
-
-  const other = TIPOS.find((tipo) => tipo !== shown)!;
-  const otherCurrent = work.dimensoes.find((item) => item.tipo === other);
 
   return (
     <Modal
@@ -206,6 +201,13 @@ export function WorkEditModal({
               defaultValue={work.titulo ?? ""}
             />
             <Input
+              name="tituloSerie"
+              label="Título da série"
+              maxLength={300}
+              defaultValue={work.tituloSerie ?? ""}
+              placeholder="Deixe vazio se não fizer parte de uma série"
+            />
+            <Input
               name="edicao"
               label="Edição"
               maxLength={150}
@@ -216,6 +218,16 @@ export function WorkEditModal({
               label="Data"
               maxLength={150}
               defaultValue={work.data ?? ""}
+            />
+            <Input
+              name="quantidadePartes"
+              label="Quantidade de partes"
+              type="number"
+              min={2}
+              max={9999}
+              step={1}
+              defaultValue={work.quantidadePartes ?? ""}
+              placeholder="Deixe vazio se for peça única"
             />
             <Select
               name="statusId"
@@ -237,10 +249,12 @@ export function WorkEditModal({
                 label: item.nome,
               }))}
             />
+          </div>
+
+          <div className="mt-4 grid gap-4 sm:grid-cols-2">
             <Select
               name="localizacaoId"
               label="Localização"
-              span={2}
               placeholder="Não informada"
               defaultValue={work.localizacao?.id ?? ""}
               options={locations.map(({ node, depth }) => ({
@@ -260,122 +274,52 @@ export function WorkEditModal({
               }))}
             />
           </div>
+
+          <div className="mt-4 grid items-end gap-4 sm:grid-cols-2">
+            <Checkbox
+              label="Faz parte de um conjunto"
+              checked={emConjunto}
+              onChange={(event) => setEmConjunto(event.target.checked)}
+              className="min-h-10"
+            />
+            {emConjunto && (
+              <Select
+                label="Ficha mãe"
+                required
+                placeholder={fichasMae === null ? "Carregando..." : "Selecione"}
+                value={fichaMaeId}
+                onChange={(event) => setFichaMaeId(event.target.value)}
+                hint={
+                  fichasMae?.length === 0
+                    ? "Nenhuma ficha mãe cadastrada neste projeto. Cadastre em Configurações."
+                    : undefined
+                }
+                options={(fichasMae ?? []).map((item) => ({
+                  value: item.id,
+                  label: `${item.codigo} · ${item.descricao}`,
+                }))}
+              />
+            )}
+          </div>
         </fieldset>
 
-        <fieldset className="border-t border-border pt-5">
-          <legend className="mb-3 text-sm font-semibold tracking-tight text-foreground">
-            Dimensões
-          </legend>
-
-          <div className="grid gap-4 sm:max-w-md">
-            <Select
-              label="Dimensão"
-              value={shown}
-              onChange={(event) => setShown(event.target.value as Tipo)}
-              placeholder={null}
-              hint={
-                otherCurrent
-                  ? `${DIMENSION_LABEL[other]}: ${formatDimension(otherCurrent)}`
-                  : `${DIMENSION_LABEL[other]}: não informada`
-              }
-              options={TIPOS.map((tipo) => ({
-                value: tipo,
-                label: DIMENSION_LABEL[tipo],
-              }))}
-            />
-          </div>
-
-          {/* Os dois ficam no DOM para que a troca no dropdown não descarte o
-              que já foi digitado; só a visibilidade muda. */}
-          {TIPOS.map((tipo) => (
-            <div key={tipo} className={tipo === shown ? "mt-4" : "hidden"}>
+        <fieldset>
+          <div className="grid gap-4 sm:grid-cols-2">
+            {TIPOS.map((tipo) => (
               <DimensionFields
-                tipo={tipo}
+                key={tipo}
+                prefix={tipo}
+                label={DIMENSION_LABEL[tipo]}
                 mode={modes[tipo]}
                 onModeChange={(mode) =>
                   setModes((current) => ({ ...current, [tipo]: mode }))
                 }
                 current={work.dimensoes.find((item) => item.tipo === tipo)}
               />
-            </div>
-          ))}
+            ))}
+          </div>
         </fieldset>
       </form>
     </Modal>
-  );
-}
-
-function DimensionFields({
-  tipo,
-  mode,
-  onModeChange,
-  current,
-}: {
-  tipo: Tipo;
-  mode: Mode;
-  onModeChange: (mode: Mode) => void;
-  current?: WorkDimension;
-}) {
-  return (
-    <div className="grid content-start gap-4 rounded-xl border border-border bg-surface-muted p-4 sm:max-w-md">
-      <Select
-        label="Formato"
-        value={mode}
-        onChange={(event) => onModeChange(event.target.value as Mode)}
-        placeholder={null}
-        options={MODE_OPTIONS}
-      />
-
-      {mode === "VARIAVEL" && (
-        <Input
-          name={`${tipo}-descricaoVariavel`}
-          label="Descrição"
-          maxLength={500}
-          defaultValue={current?.descricaoVariavel ?? ""}
-          placeholder="Ex.: dimensões variáveis conforme montagem"
-        />
-      )}
-
-      {mode === "NUMERICA" && (
-        <>
-          <div className="grid grid-cols-3 gap-2">
-            <Input
-              name={`${tipo}-altura`}
-              label="Altura"
-              type="number"
-              step="0.001"
-              min="0.001"
-              defaultValue={current?.altura ?? ""}
-            />
-            <Input
-              name={`${tipo}-largura`}
-              label="Largura"
-              type="number"
-              step="0.001"
-              min="0.001"
-              defaultValue={current?.largura ?? ""}
-            />
-            <Input
-              name={`${tipo}-profundidade`}
-              label="Prof."
-              type="number"
-              step="0.001"
-              min="0.001"
-              defaultValue={current?.profundidade ?? ""}
-            />
-          </div>
-          <Select
-            name={`${tipo}-unidade`}
-            label="Unidade"
-            placeholder={null}
-            defaultValue={current?.unidade ?? "CM"}
-            options={[
-              { value: "CM", label: "Centímetros" },
-              { value: "IN", label: "Polegadas" },
-            ]}
-          />
-        </>
-      )}
-    </div>
   );
 }

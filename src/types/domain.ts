@@ -87,6 +87,29 @@ export interface LocationNode {
   filhos: LocationNode[];
 }
 
+export interface WorkRef {
+  id: string;
+  projetoId: string;
+  codigoAcervo: string;
+  titulo: string | null;
+}
+
+/** Ficha mãe: informativo de um conjunto. Não é obra; as peças apontam para ela. */
+export interface WorkSet {
+  id: string;
+  projetoId: string;
+  projeto: { id: string; nome: string };
+  codigo: string;
+  descricao: string;
+  imagemUrl: string | null;
+  dimensao: Omit<WorkDimension, "id" | "tipo"> | null;
+  totalObras: number;
+}
+
+export interface WorkSetDetail extends WorkSet {
+  obras: WorkRef[];
+}
+
 export interface Work {
   id: string;
   projetoId: string;
@@ -96,6 +119,11 @@ export interface Work {
   tituloExibicao: string;
   edicao: string | null;
   data: string | null;
+  grupoObra: boolean;
+  quantidadePartes: number | null;
+  serie: boolean;
+  tituloSerie: string | null;
+  fichaMae: { id: string; codigo: string; descricao: string } | null;
   fotoPrincipalUrl: string | null;
   fotoPrincipalCreditos: string | null;
   status: WorkStatus | null;

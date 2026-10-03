@@ -1,14 +1,16 @@
 "use client";
 
-import { ImageOff, MapPin, Ruler } from "lucide-react";
+import { ImageOff } from "lucide-react";
 import Link from "next/link";
-import { Badge } from "@/components/ui";
-import { formatDimension } from "@/lib/work";
+import { StatusDot } from "@/components/ui";
+import { workTitle } from "@/lib/work";
 import type { Work } from "@/types/domain";
 
 export function WorkCard({ work, href }: { work: Work; href: string }) {
   const artists = work.artistas.map((artist) => artist.nome).join(", ");
-  const dimension = work.dimensoes[0];
+  const title = work.data
+    ? `${workTitle(work)}, ${work.data}`
+    : workTitle(work);
 
   return (
     <article className="group relative flex flex-col overflow-hidden rounded-xl border border-border bg-surface shadow-sm transition-all focus-within:border-primary-700 hover:-translate-y-0.5 hover:border-border-strong hover:shadow-md">
@@ -41,34 +43,34 @@ export function WorkCard({ work, href }: { work: Work; href: string }) {
             href={href}
             className="text-left after:absolute after:inset-0 after:content-[''] focus-visible:outline-none"
           >
-            {work.tituloExibicao}
+            {title}
           </Link>
         </h3>
 
         {artists && (
-          <p className="line-clamp-2 text-sm text-muted-foreground">{artists}</p>
+          <p className="line-clamp-2 text-sm text-muted-foreground">
+            {artists}
+          </p>
         )}
 
-        <div className="mt-auto flex flex-wrap items-center gap-1.5 pt-2">
-          {work.status && <Badge tone="brand">{work.status.nome}</Badge>}
-          {work.tecnica && <Badge tone="outline">{work.tecnica.nome}</Badge>}
-          {work.data && <Badge tone="neutral">{work.data}</Badge>}
-        </div>
+        {work.tecnica && (
+          <p className="text-sm text-ink-600">{work.tecnica.nome}</p>
+        )}
 
-        {(work.localizacao || dimension) && (
-          <dl className="flex flex-col gap-1 border-t border-border pt-2.5 text-xs text-muted-foreground">
+        {(work.status || work.localizacao) && (
+          <dl className="mt-auto flex flex-col gap-1.5 border-t border-border pt-2.5 text-xs text-muted-foreground">
+            {work.status && (
+              <div>
+                <dt className="sr-only">Status</dt>
+                <dd>
+                  <StatusDot tone="brand">{work.status.nome}</StatusDot>
+                </dd>
+              </div>
+            )}
             {work.localizacao && (
               <div className="flex items-center gap-1.5">
                 <dt className="sr-only">Localização</dt>
-                <MapPin aria-hidden className="size-3.5 shrink-0" />
                 <dd className="truncate">{work.localizacao.nome}</dd>
-              </div>
-            )}
-            {dimension && (
-              <div className="flex items-center gap-1.5">
-                <dt className="sr-only">Dimensões</dt>
-                <Ruler aria-hidden className="size-3.5 shrink-0" />
-                <dd className="truncate">{formatDimension(dimension)}</dd>
               </div>
             )}
           </dl>
