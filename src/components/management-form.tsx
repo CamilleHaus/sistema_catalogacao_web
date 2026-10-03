@@ -14,6 +14,7 @@ import {
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import {
   Button,
+  FilePicker,
   Input,
   Modal,
   RecordCard,
@@ -21,11 +22,12 @@ import {
   Select,
   Tabs,
   Textarea,
+  useFilePick,
   type FactRow,
   type SelectOption,
   type TabItem,
 } from "@/components/ui";
-import { apiFetch } from "@/lib/api-client";
+import { apiFetch, uploadProjectFile } from "@/lib/api-client";
 import { errorMessage } from "@/lib/work";
 import type { LocationNode, NamedReference, Work } from "@/types/domain";
 
@@ -151,8 +153,6 @@ const SECTIONS: Record<
   },
 };
 
-const KINDS = Object.keys(SECTIONS) as Kind[];
-
 function text(value: unknown) {
   return typeof value === "string" ? value : "";
 }
@@ -215,6 +215,7 @@ function rowsOf(kind: Kind, item: Item): FactRow[] {
 }
 
 export function ManagementForm({
+  kinds,
   projetoId,
   work,
   locations,
@@ -222,6 +223,8 @@ export function ManagementForm({
   onChanged,
   onError,
 }: {
+  /** Quais seções renderizar — Conservação e Controle mostram subconjuntos diferentes. */
+  kinds: Kind[];
   projetoId: string;
   work: Work;
   locations: LocationNode[];
@@ -233,7 +236,7 @@ export function ManagementForm({
   const [data, setData] = useState<Data | null>(null);
   const [aux, setAux] = useState<Aux | null>(null);
   const [busy, setBusy] = useState(false);
-  const [tab, setTab] = useState<Kind>("analises");
+  const [tab, setTab] = useState<Kind>(kinds[0]);
   const [editing, setEditing] = useState<{
     kind: Kind;
     id: string | null;
@@ -296,7 +299,7 @@ export function ManagementForm({
       ? data[editing.kind].find((item) => item.id === editing.id)
       : undefined;
 
-  const tabs: TabItem[] = KINDS.map((kind) => ({
+  const tabs: TabItem[] = kinds.map((kind) => ({
     id: kind,
     label: SECTIONS[kind].label,
     icon: SECTIONS[kind].icon,
@@ -338,6 +341,7 @@ export function ManagementForm({
       {editing && (
         <ManagementModal
           base={base}
+          projetoId={projetoId}
           kind={editing.kind}
           item={editingItem}
           aux={aux}
@@ -407,6 +411,7 @@ function CardExtra({ kind, item }: { kind: Kind; item: Item }) {
 
 function ManagementModal({
   base,
+  projetoId,
   kind,
   item,
   aux,
@@ -417,6 +422,7 @@ function ManagementModal({
   onAction,
 }: {
   base: string;
+  projetoId: string;
   kind: Kind;
   item?: Item;
   aux: Aux;
@@ -427,8 +433,8 @@ function ManagementModal({
   onAction: (run: () => Promise<unknown>, refreshWork?: boolean) => Promise<boolean>;
 }) {
   const spec = SECTIONS[kind];
-  const [imageUrl, setImageUrl] = useState("");
-  const [reportUrl, setReportUrl] = useState("");
+  const imagePick = useFilePick("imagem");
+  const reportPick = useFilePick("relatorio");
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -575,27 +581,36 @@ function ManagementModal({
             </div>
           )}
 
-          <div className="mt-3 flex gap-2">
-            <input
-              type="url"
-              value={imageUrl}
-              onChange={(event) => setImageUrl(event.target.value)}
-              placeholder="URL da imagem"
-              aria-label="URL da nova imagem"
-              className="h-10 min-w-0 flex-1 rounded-lg border border-border-strong bg-surface px-3 text-sm shadow-xs outline-none focus:border-primary-700 focus:ring-2 focus:ring-primary-700/20"
+          <div className="mt-3 grid gap-2">
+            <FilePicker
+              accept="imagem"
+              multiple
+              files={imagePick.files}
+              onFiles={imagePick.choose}
+              disabled={busy}
+              invalid={Boolean(imagePick.problem)}
             />
+            {imagePick.problem && (
+              <p className="text-xs font-medium text-danger-700">
+                {imagePick.problem}
+              </p>
+            )}
             <Button
               variant="secondary"
-              disabled={busy || !imageUrl.trim()}
+              className="justify-self-end"
+              disabled={busy || imagePick.files.length === 0}
               icon={<Plus className="size-4" />}
               onClick={async () => {
-                const ok = await onAction(() =>
-                  apiFetch(`${base}/${kind}/${item.id}/imagens`, {
-                    method: "POST",
-                    body: JSON.stringify({ imagemUrl: imageUrl.trim() }),
-                  }),
-                );
-                if (ok) setImageUrl("");
+                const ok = await onAction(async () => {
+                  for (const file of imagePick.files) {
+                    const { url } = await uploadProjectFile(projetoId, file);
+                    await apiFetch(`${base}/${kind}/${item.id}/imagens`, {
+                      method: "POST",
+                      body: JSON.stringify({ imagemUrl: url }),
+                    });
+                  }
+                });
+                if (ok) imagePick.clear();
               }}
             >
               Adicionar
@@ -638,26 +653,35 @@ function ManagementModal({
             </p>
           )}
 
-          <div className="mt-3 flex gap-2">
-            <input
-              type="url"
-              value={reportUrl}
-              onChange={(event) => setReportUrl(event.target.value)}
-              placeholder="URL do PDF, DOC ou DOCX"
-              aria-label="URL do relatório"
-              className="h-10 min-w-0 flex-1 rounded-lg border border-border-strong bg-surface px-3 text-sm shadow-xs outline-none focus:border-primary-700 focus:ring-2 focus:ring-primary-700/20"
+          <div className="mt-3 grid gap-2">
+            <FilePicker
+              accept="relatorio"
+              files={reportPick.files}
+              onFiles={reportPick.choose}
+              disabled={busy}
+              invalid={Boolean(reportPick.problem)}
             />
+            {reportPick.problem && (
+              <p className="text-xs font-medium text-danger-700">
+                {reportPick.problem}
+              </p>
+            )}
             <Button
               variant="secondary"
-              disabled={busy || !reportUrl.trim()}
+              className="justify-self-end"
+              disabled={busy || reportPick.files.length === 0}
               onClick={async () => {
-                const ok = await onAction(() =>
-                  apiFetch(`${base}/restauros/${item.id}/relatorio`, {
+                const ok = await onAction(async () => {
+                  const { url } = await uploadProjectFile(
+                    projetoId,
+                    reportPick.files[0],
+                  );
+                  return apiFetch(`${base}/restauros/${item.id}/relatorio`, {
                     method: "PUT",
-                    body: JSON.stringify({ url: reportUrl.trim() }),
-                  }),
-                );
-                if (ok) setReportUrl("");
+                    body: JSON.stringify({ url }),
+                  });
+                });
+                if (ok) reportPick.clear();
               }}
             >
               {currentReport ? "Substituir" : "Adicionar"}

@@ -20,11 +20,14 @@ const TONES: Record<BadgeTone, string> = {
 
 export function Badge({
   tone = "neutral",
+  color,
   icon,
   className,
   children,
 }: {
   tone?: BadgeTone;
+  /** Sobrescreve `tone` com uma cor livre (ex.: a cor escolhida de uma tag) — fundo em tinta clara da própria cor, texto na cor cheia. */
+  color?: string | null;
   icon?: ReactNode;
   className?: string;
   children: ReactNode;
@@ -34,9 +37,10 @@ export function Badge({
       className={cn(
         "inline-flex items-center gap-1 rounded-sm px-2.5 py-0.5 text-xs font-semibold whitespace-nowrap",
         "[&_svg]:size-3 [&_svg]:shrink-0",
-        TONES[tone],
+        !color && TONES[tone],
         className,
       )}
+      style={color ? { backgroundColor: `${color}1a`, color } : undefined}
     >
       {icon}
       {children}

@@ -11,16 +11,20 @@ import {
 import { EmptyState } from "@/components/empty-state";
 import {
   Button,
+  FileField,
+  FilePicker,
   Input,
   Modal,
   RecordCard,
   SectionHeader,
   Tabs,
   Textarea,
+  useFilePick,
   type FactRow,
   type TabItem,
 } from "@/components/ui";
-import { apiFetch } from "@/lib/api-client";
+import { apiFetch, uploadProjectFile } from "@/lib/api-client";
+import { resolveUploads } from "@/lib/uploads";
 import { errorMessage } from "@/lib/work";
 import type {
   MuseumResearch,
@@ -210,6 +214,7 @@ export function ResearchForm({
       {editing && (
         <ResearchModal
           base={base}
+          projetoId={projetoId}
           kind={editing.kind}
           item={editingItem}
           busy={busy}
@@ -220,13 +225,16 @@ export function ResearchForm({
             );
             if (ok) setEditing(null);
           }}
-          onImageAdd={(publicationId, url) =>
-            action(() =>
-              apiFetch(`${base}/publicacoes/${publicationId}/imagens`, {
-                method: "POST",
-                body: JSON.stringify({ imagemUrl: url }),
-              }),
-            )
+          onImageAdd={(publicationId, files) =>
+            action(async () => {
+              for (const file of files) {
+                const { url } = await uploadProjectFile(projetoId, file);
+                await apiFetch(`${base}/publicacoes/${publicationId}/imagens`, {
+                  method: "POST",
+                  body: JSON.stringify({ imagemUrl: url }),
+                });
+              }
+            })
           }
           onImageRemove={(publicationId, imageId) =>
             action(() =>
@@ -319,6 +327,7 @@ const MODAL_FORM_ID = "editar-pesquisa";
 
 function ResearchModal({
   base,
+  projetoId,
   kind,
   item,
   busy,
@@ -328,6 +337,7 @@ function ResearchModal({
   onImageRemove,
 }: {
   base: string;
+  projetoId: string;
   kind: Kind;
   item?: Record_;
   busy: boolean;
@@ -337,16 +347,17 @@ function ResearchModal({
     method: "POST" | "PATCH",
     path: string,
   ) => Promise<void>;
-  onImageAdd: (publicationId: string, url: string) => Promise<boolean>;
+  onImageAdd: (publicationId: string, files: File[]) => Promise<boolean>;
   onImageRemove: (publicationId: string, imageId: string) => Promise<boolean>;
 }) {
   const spec = KINDS[kind];
   const publication = kind === "publicacoes" ? (item as WorkPublication) : null;
-  const [imageUrl, setImageUrl] = useState("");
+  const imagePick = useFilePick("imagem");
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
+    await resolveUploads(projetoId, form);
 
     const body: Record<string, unknown> = {};
     for (const field of spec.fields) {
@@ -358,17 +369,12 @@ function ResearchModal({
 
     // Só na criação a API aceita a lista de imagens junto do registro.
     if (kind === "publicacoes" && !item) {
-      const raw = form.get("imagens");
-      body.imagens =
-        typeof raw === "string"
-          ? raw
-              .split(/\r?\n/)
-              .map((url) => url.trim())
-              .filter(Boolean)
-          : [];
+      body.imagens = form
+        .getAll("imagens")
+        .filter((url): url is string => typeof url === "string" && !!url);
     }
 
-    void onSubmit(
+    await onSubmit(
       body,
       item ? "PATCH" : "POST",
       item ? `${base}/${kind}/${item.id}` : `${base}/${kind}`,
@@ -422,13 +428,12 @@ function ResearchModal({
         )}
 
         {kind === "publicacoes" && !item && (
-          <Textarea
+          <FileField
             name="imagens"
             label="Imagens"
             span={2}
-            rows={3}
-            placeholder={"https://...\nhttps://..."}
-            hint="Uma URL por linha. Depois de criar, dá para gerenciar as imagens aqui mesmo."
+            multiple
+            hint="Depois de criar, dá para gerenciar as imagens aqui mesmo."
           />
         )}
       </form>
@@ -437,12 +442,11 @@ function ResearchModal({
         <ImageManager
           publication={publication}
           busy={busy}
-          value={imageUrl}
-          onChange={setImageUrl}
+          pick={imagePick}
           onAdd={async () => {
-            if (!imageUrl.trim()) return;
-            const ok = await onImageAdd(publication.id, imageUrl.trim());
-            if (ok) setImageUrl("");
+            if (imagePick.files.length === 0) return;
+            const ok = await onImageAdd(publication.id, imagePick.files);
+            if (ok) imagePick.clear();
           }}
           onRemove={(imageId) => onImageRemove(publication.id, imageId)}
         />
@@ -455,15 +459,13 @@ function ResearchModal({
 function ImageManager({
   publication,
   busy,
-  value,
-  onChange,
+  pick,
   onAdd,
   onRemove,
 }: {
   publication: WorkPublication;
   busy: boolean;
-  value: string;
-  onChange: (value: string) => void;
+  pick: ReturnType<typeof useFilePick>;
   onAdd: () => void;
   onRemove: (imageId: string) => void;
 }): ReactNode {
@@ -503,18 +505,22 @@ function ImageManager({
         </div>
       )}
 
-      <div className="mt-3 flex gap-2">
-        <input
-          type="url"
-          value={value}
-          onChange={(event) => onChange(event.target.value)}
-          placeholder="URL da imagem"
-          aria-label="URL da nova imagem"
-          className="h-10 min-w-0 flex-1 rounded-lg border border-border-strong bg-surface px-3 text-sm shadow-xs outline-none focus:border-primary-700 focus:ring-2 focus:ring-primary-700/20"
+      <div className="mt-3 grid gap-2">
+        <FilePicker
+          accept="imagem"
+          multiple
+          files={pick.files}
+          onFiles={pick.choose}
+          disabled={busy}
+          invalid={Boolean(pick.problem)}
         />
+        {pick.problem && (
+          <p className="text-xs font-medium text-danger-700">{pick.problem}</p>
+        )}
         <Button
           variant="secondary"
-          disabled={busy || !value.trim()}
+          className="justify-self-end"
+          disabled={busy || pick.files.length === 0}
           icon={<Plus className="size-4" />}
           onClick={onAdd}
         >

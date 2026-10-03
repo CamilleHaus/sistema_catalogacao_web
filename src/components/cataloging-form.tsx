@@ -5,7 +5,7 @@ import { useCallback, useEffect, useState, type FormEvent } from "react";
 import {
   Badge,
   Button,
-  Input,
+  FileField,
   Modal,
   MultiSelect,
   RecordCard,
@@ -17,6 +17,7 @@ import {
   type TabItem,
 } from "@/components/ui";
 import { apiFetch } from "@/lib/api-client";
+import { resolveUploads } from "@/lib/uploads";
 import { errorMessage } from "@/lib/work";
 import type {
   CatalogCategory,
@@ -122,7 +123,7 @@ export function CatalogingForm({
       catalog && catalog.tags.length > 0 ? (
         <span className="flex flex-wrap gap-1">
           {catalog.tags.map((tag) => (
-            <Badge key={tag.id} tone="neutral">
+            <Badge key={tag.id} color={tag.cor}>
               {tag.nome}
             </Badge>
           ))}
@@ -340,12 +341,13 @@ export function CatalogingForm({
           busy={busy}
           onClose={() => setEditing(null)}
           onSubmit={async (form) => {
-            const body = {
-              localAssinaturaId: form.get("localAssinaturaId"),
-              imagemUrl: optional(form, "imagemUrl"),
-            };
-            const ok = await action(() =>
-              editingSignature
+            const ok = await action(async () => {
+              await resolveUploads(projetoId, form);
+              const body = {
+                localAssinaturaId: form.get("localAssinaturaId"),
+                imagemUrl: optional(form, "imagemUrl"),
+              };
+              return editingSignature
                 ? apiFetch(`${base}/assinaturas/${editingSignature.id}`, {
                     method: "PATCH",
                     body: JSON.stringify(body),
@@ -353,8 +355,8 @@ export function CatalogingForm({
                 : apiFetch(`${base}/assinaturas`, {
                     method: "POST",
                     body: JSON.stringify(body),
-                  }),
-            );
+                  });
+            });
             if (ok) setEditing(null);
           }}
         >
@@ -370,13 +372,11 @@ export function CatalogingForm({
               label: item.nome,
             }))}
           />
-          <Input
+          <FileField
             name="imagemUrl"
-            label="URL da imagem"
-            type="url"
+            label="Imagem da assinatura"
             span={2}
-            defaultValue={editingSignature?.imagemUrl ?? ""}
-            placeholder="Opcional"
+            currentUrl={editingSignature?.imagemUrl}
           />
         </CatalogModal>
       )}
@@ -389,12 +389,13 @@ export function CatalogingForm({
           busy={busy}
           onClose={() => setEditing(null)}
           onSubmit={async (form) => {
-            const body = {
-              imagemUrl: form.get("imagemUrl"),
-              observacoes: optional(form, "observacoes"),
-            };
-            const ok = await action(() =>
-              editingCertificate
+            const ok = await action(async () => {
+              await resolveUploads(projetoId, form);
+              const body = {
+                imagemUrl: form.get("imagemUrl"),
+                observacoes: optional(form, "observacoes"),
+              };
+              return editingCertificate
                 ? apiFetch(`${base}/certificados/${editingCertificate.id}`, {
                     method: "PATCH",
                     body: JSON.stringify(body),
@@ -402,19 +403,18 @@ export function CatalogingForm({
                 : apiFetch(`${base}/certificados`, {
                     method: "POST",
                     body: JSON.stringify(body),
-                  }),
-            );
+                  });
+            });
             if (ok) setEditing(null);
           }}
         >
-          <Input
+          <FileField
             name="imagemUrl"
-            label="URL da imagem"
-            type="url"
+            label="Arquivo do certificado"
+            accept="documento"
             span={2}
             required
-            defaultValue={editingCertificate?.imagemUrl ?? ""}
-            placeholder="https://..."
+            currentUrl={editingCertificate?.imagemUrl}
           />
           <Textarea
             name="observacoes"

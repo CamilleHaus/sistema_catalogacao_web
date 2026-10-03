@@ -6,13 +6,23 @@ import { useAuthStore } from "@/stores/auth-store";
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
 let refreshPromise: Promise<string | null> | null = null;
 
-async function request<T>(path: string, init: RequestInit, allowRefresh: boolean) {
+async function request<T>(
+  path: string,
+  init: RequestInit,
+  allowRefresh: boolean,
+) {
   if (!API_URL) throw new Error("NEXT_PUBLIC_API_URL não foi configurada.");
 
   const token = useAuthStore.getState().accessToken;
   const headers = new Headers(init.headers);
   if (token) headers.set("Authorization", `Bearer ${token}`);
-  if (init.body && !headers.has("Content-Type")) {
+  // Em FormData o boundary faz parte do Content-Type — só o navegador sabe
+  // montá-lo, então o cabeçalho não pode ser definido aqui.
+  if (
+    init.body &&
+    !(init.body instanceof FormData) &&
+    !headers.has("Content-Type")
+  ) {
     headers.set("Content-Type", "application/json");
   }
 
@@ -51,6 +61,24 @@ async function request<T>(path: string, init: RequestInit, allowRefresh: boolean
 
 export function apiFetch<T>(path: string, init: RequestInit = {}) {
   return request<T>(path, init, true);
+}
+
+export type UploadedFile = {
+  key: string;
+  url: string;
+  tamanho: number;
+  tipo: string;
+  nomeOriginal: string;
+};
+
+/** Sobe o arquivo para o storage do projeto e devolve a URL já hospedada. */
+export function uploadProjectFile(projetoId: string, file: File) {
+  const body = new FormData();
+  body.append("arquivo", file);
+  return apiFetch<UploadedFile>(`/projetos/${projetoId}/arquivos`, {
+    method: "POST",
+    body,
+  });
 }
 
 export { ApiError };

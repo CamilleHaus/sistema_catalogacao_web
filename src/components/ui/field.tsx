@@ -25,7 +25,7 @@ function controlClasses(invalid: boolean, className?: string) {
   return cn(CONTROL, invalid ? CONTROL_ERROR : CONTROL_OK, className);
 }
 
-type FieldMeta = {
+export type FieldMeta = {
   label?: ReactNode;
   hint?: ReactNode;
   error?: string | null;
@@ -41,7 +41,7 @@ const SPANS = {
 } as const;
 
 /** Rótulo, controle, dica e erro — a moldura compartilhada por todos os campos. */
-function FieldShell({
+export function FieldShell({
   label,
   hint,
   error,
@@ -81,7 +81,11 @@ function FieldShell({
   );
 }
 
-function useFieldIds(id: string | undefined, hint: unknown, error: unknown) {
+export function useFieldIds(
+  id: string | undefined,
+  hint: unknown,
+  error: unknown,
+) {
   const generated = useId();
   const fieldId = id ?? generated;
   return {

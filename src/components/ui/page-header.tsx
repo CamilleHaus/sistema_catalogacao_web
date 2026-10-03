@@ -10,6 +10,7 @@ export function PageHeader({
   actions,
   backHref,
   backLabel = "Voltar",
+  backRowActions,
   className,
 }: {
   eyebrow?: ReactNode;
@@ -18,18 +19,23 @@ export function PageHeader({
   actions?: ReactNode;
   backHref?: string;
   backLabel?: string;
+  /** Conteúdo à direita, na mesma linha do link de voltar (em vez de ao lado do título). */
+  backRowActions?: ReactNode;
   className?: string;
 }) {
   return (
     <div className={cn("flex flex-col gap-4", className)}>
       {backHref && (
-        <Link
-          href={backHref}
-          className="inline-flex w-fit items-center gap-1 text-sm font-medium text-ink-500 hover:text-foreground"
-        >
-          <ChevronLeft className="size-4" />
-          {backLabel}
-        </Link>
+        <div className="flex items-center justify-between gap-4">
+          <Link
+            href={backHref}
+            className="inline-flex w-fit items-center gap-1 text-sm font-medium text-ink-500 hover:text-foreground"
+          >
+            <ChevronLeft className="size-4" />
+            {backLabel}
+          </Link>
+          {backRowActions}
+        </div>
       )}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div className="min-w-0">

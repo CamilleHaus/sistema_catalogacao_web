@@ -7,6 +7,7 @@ import { EmptyState } from "@/components/empty-state";
 import { PageMessage } from "@/components/page-message";
 import { RoleGate } from "@/components/role-gate";
 import { apiFetch } from "@/lib/api-client";
+import { notifySuccess } from "@/lib/toast";
 import type { Client, Project } from "@/types/domain";
 
 type OpenModal = "client" | "project" | null;
@@ -16,7 +17,6 @@ export default function CompanyAdminPage() {
   const [clients, setClients] = useState<Client[]>([]);
   const [openModal, setOpenModal] = useState<OpenModal>(null);
   const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -84,7 +84,6 @@ export default function CompanyAdminPage() {
   async function submit(action: () => Promise<unknown>, successMessage: string, form: HTMLFormElement) {
     setSaving(true);
     setError(null);
-    setSuccess(null);
     try {
       await action();
       const [projectData, clientData] = await loadData();
@@ -92,7 +91,7 @@ export default function CompanyAdminPage() {
       setClients(clientData);
       form.reset();
       setOpenModal(null);
-      setSuccess(successMessage);
+      notifySuccess(successMessage);
     } catch (caughtError: unknown) {
       setError(messageFrom(caughtError, "Não foi possível salvar."));
     } finally {
@@ -119,7 +118,6 @@ export default function CompanyAdminPage() {
         </div>
 
         {error && <div className="mt-6"><PageMessage message={error} /></div>}
-        {success && <div className="mt-6 rounded-xl border border-success-100 bg-success-50 px-4 py-3 text-sm text-success-800">{success}</div>}
 
         <section className="mt-8">
           <div className="grid gap-4">

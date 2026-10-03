@@ -12,6 +12,7 @@ import {
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import {
   Button,
+  FileField,
   Input,
   Modal,
   RecordCard,
@@ -23,6 +24,7 @@ import {
   type TabItem,
 } from "@/components/ui";
 import { apiFetch } from "@/lib/api-client";
+import { resolveUploads } from "@/lib/uploads";
 import { errorMessage } from "@/lib/work";
 import type {
   FinancialDocument,
@@ -417,6 +419,22 @@ export function FinancialForm({
     if (ok) setEditing(null);
   }
 
+  /** Igual a `save`, mas sobe antes os arquivos escolhidos no formulário. */
+  async function saveForm(
+    path: string,
+    method: "POST" | "PATCH",
+    form: FormData,
+  ) {
+    const ok = await action(async () => {
+      await resolveUploads(projetoId, form);
+      return apiFetch(`${base}/${path}`, {
+        method,
+        body: JSON.stringify(plainPayload(form)),
+      });
+    });
+    if (ok) setEditing(null);
+  }
+
   const editingDocument =
     editing?.kind === "document" && editing.id
       ? documentsOf(editing.path).find((item) => item.id === editing.id)
@@ -457,21 +475,21 @@ export function FinancialForm({
           busy={busy}
           onClose={() => setEditing(null)}
           onSubmit={(form) =>
-            save(
+            saveForm(
               editingDocument
                 ? `${editing.path}/${editingDocument.id}`
                 : editing.path,
               editingDocument ? "PATCH" : "POST",
-              plainPayload(form),
+              form,
             )
           }
         >
-          <Input
+          <FileField
             name="imagemUrl"
-            label="URL da imagem"
-            type="url"
+            label="Arquivo do documento"
+            accept="documento"
             span={2}
-            defaultValue={editingDocument?.imagemUrl ?? ""}
+            currentUrl={editingDocument?.imagemUrl}
           />
           {editing.numbered && (
             <Input

@@ -6,6 +6,7 @@ import { EmptyState } from "@/components/empty-state";
 import { PageMessage } from "@/components/page-message";
 import { RoleGate } from "@/components/role-gate";
 import { apiFetch } from "@/lib/api-client";
+import { notifySuccess } from "@/lib/toast";
 import type { Company, CompanyUser, Paginated } from "@/types/domain";
 
 export default function GlobalAdminPage() {
@@ -14,7 +15,6 @@ export default function GlobalAdminPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
-  const [success, setSuccess] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -46,7 +46,6 @@ export default function GlobalAdminPage() {
     event.preventDefault();
     setCreating(true);
     setError(null);
-    setSuccess(null);
 
     const form = event.currentTarget;
     const data = new FormData(form);
@@ -67,7 +66,7 @@ export default function GlobalAdminPage() {
 
       const companyData = await apiFetch<Company[]>("/admin-global/empresas");
       setCompanies(companyData);
-      setSuccess("Empresa e primeiro administrador criados com sucesso.");
+      notifySuccess("Empresa e primeiro administrador criados com sucesso.");
       form.reset();
     } catch (caughtError: unknown) {
       setError(
@@ -90,11 +89,6 @@ export default function GlobalAdminPage() {
           </div>
         </div>
         {error && <div className="mt-6"><PageMessage message={error} /></div>}
-        {success && (
-          <div className="mt-6 rounded-xl border border-success-100 bg-success-50 px-4 py-3 text-sm text-success-800">
-            {success}
-          </div>
-        )}
         <section className="mt-8 rounded-2xl bg-white p-6 shadow-sm">
           <div>
             <h2 className="text-xl font-bold">Criar empresa</h2>

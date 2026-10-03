@@ -2,10 +2,25 @@
 
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { AppShell } from "@/components/app-shell";
+import { EmptyState } from "@/components/empty-state";
 import { PageMessage } from "@/components/page-message";
 import { RoleGate } from "@/components/role-gate";
+import { Button, Checkbox, Input, ListRow, RowList, Select } from "@/components/ui";
 import { apiFetch } from "@/lib/api-client";
-import type { CompanyUser, Paginated, Project, ProjectPermission, ProjectUserLink } from "@/types/domain";
+import { notifySuccess } from "@/lib/toast";
+import { errorMessage } from "@/lib/work";
+import type {
+  CompanyUser,
+  Paginated,
+  Project,
+  ProjectPermission,
+  ProjectUserLink,
+} from "@/types/domain";
+
+const PERMISSION_OPTIONS = [
+  { value: "VISUALIZAR", label: "Visualizar" },
+  { value: "EDITAR", label: "Editar" },
+];
 
 export default function UsersPage() {
   const [users, setUsers] = useState<CompanyUser[]>([]);
@@ -13,48 +28,241 @@ export default function UsersPage() {
   const [projectId, setProjectId] = useState("");
   const [links, setLinks] = useState<ProjectUserLink[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  const commonUsers = useMemo(() => users.filter((user) => user.papel === "USUARIO" && user.ativo), [users]);
+  const commonUsers = useMemo(
+    () => users.filter((user) => user.papel === "USUARIO" && user.ativo),
+    [users],
+  );
 
-  const loadBase = useCallback(() => Promise.all([
-    apiFetch<Paginated<CompanyUser>>("/usuarios?limite=100&ativo=true"),
-    apiFetch<Project[]>("/projetos?status=ATIVO"),
-  ]), []);
+  const loadBase = useCallback(
+    () =>
+      Promise.all([
+        apiFetch<Paginated<CompanyUser>>("/usuarios?limite=100&ativo=true"),
+        apiFetch<Project[]>("/projetos?status=ATIVO"),
+      ]),
+    [],
+  );
 
-  useEffect(() => { let active = true; loadBase().then(([userData, projectData]) => { if (active) { setUsers(userData.dados); setProjects(projectData); } }).catch((caught: unknown) => active && setError(message(caught))); return () => { active = false; }; }, [loadBase]);
-  useEffect(() => { if (!projectId) return; let active = true; apiFetch<ProjectUserLink[]>(`/projetos/${projectId}/usuarios`).then((data) => active && setLinks(data)).catch((caught: unknown) => active && setError(message(caught))); return () => { active = false; }; }, [projectId]);
+  useEffect(() => {
+    let active = true;
+    loadBase()
+      .then(([userData, projectData]) => {
+        if (active) {
+          setUsers(userData.dados);
+          setProjects(projectData);
+        }
+      })
+      .catch((caught: unknown) => active && setError(errorMessage(caught)));
+    return () => {
+      active = false;
+    };
+  }, [loadBase]);
+
+  useEffect(() => {
+    if (!projectId) return;
+    let active = true;
+    apiFetch<ProjectUserLink[]>(`/projetos/${projectId}/usuarios`)
+      .then((data) => active && setLinks(data))
+      .catch((caught: unknown) => active && setError(errorMessage(caught)));
+    return () => {
+      active = false;
+    };
+  }, [projectId]);
 
   async function createUser(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault(); const form = event.currentTarget; const data = new FormData(form); const selectedProject = String(data.get("projetoId") || "");
-    setSaving(true); clearMessages();
+    event.preventDefault();
+    const form = event.currentTarget;
+    const data = new FormData(form);
+    const selectedProject = String(data.get("projetoId") || "");
+    setSaving(true);
+    setError(null);
     try {
-      await apiFetch("/usuarios", { method: "POST", body: JSON.stringify({ nome: data.get("nome"), email: data.get("email"), papel: "USUARIO", senhaTemporaria: data.get("senha"), projetos: [{ projetoId: selectedProject, permissao: data.get("permissao") }] }) });
-      const [userData, projectData] = await loadBase(); setUsers(userData.dados); setProjects(projectData); form.reset(); setSuccess("Usuário criado e vinculado ao projeto.");
-      if (projectId === selectedProject) setLinks(await apiFetch(`/projetos/${projectId}/usuarios`));
-    } catch (caught: unknown) { setError(message(caught)); } finally { setSaving(false); }
+      await apiFetch("/usuarios", {
+        method: "POST",
+        body: JSON.stringify({
+          nome: data.get("nome"),
+          email: data.get("email"),
+          papel: "USUARIO",
+          senhaTemporaria: data.get("senha"),
+          projetos: [{ projetoId: selectedProject, permissao: data.get("permissao") }],
+        }),
+      });
+      const [userData, projectData] = await loadBase();
+      setUsers(userData.dados);
+      setProjects(projectData);
+      form.reset();
+      notifySuccess("Usuário criado e vinculado ao projeto.");
+      if (projectId === selectedProject) {
+        setLinks(await apiFetch(`/projetos/${projectId}/usuarios`));
+      }
+    } catch (caught: unknown) {
+      setError(errorMessage(caught));
+    } finally {
+      setSaving(false);
+    }
   }
 
   async function updateAccess(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault(); if (!projectId) return; const data = new FormData(event.currentTarget); const selectedIds = data.getAll("usuarioId").map(String); const currentIds = new Set(links.map((link) => link.usuario.id)); const removedIds = [...currentIds].filter((id) => !selectedIds.includes(id));
-    setSaving(true); clearMessages();
+    event.preventDefault();
+    if (!projectId) return;
+    const data = new FormData(event.currentTarget);
+    const selectedIds = data.getAll("usuarioId").map(String);
+    const currentIds = new Set(links.map((link) => link.usuario.id));
+    const removedIds = [...currentIds].filter((id) => !selectedIds.includes(id));
+    setSaving(true);
+    setError(null);
     try {
-      await apiFetch(`/projetos/${projectId}/usuarios`, { method: "PUT", body: JSON.stringify({ usuarios: selectedIds.map((usuarioId) => ({ usuarioId, permissao: data.get(`permissao-${usuarioId}`) as ProjectPermission })), ...(data.get("confirmarRemocoes") ? { confirmarDesativacaoUsuarioIds: removedIds } : {}) }) });
-      setLinks(await apiFetch(`/projetos/${projectId}/usuarios`)); setSuccess("Permissões atualizadas.");
-    } catch (caught: unknown) { setError(message(caught)); } finally { setSaving(false); }
+      await apiFetch(`/projetos/${projectId}/usuarios`, {
+        method: "PUT",
+        body: JSON.stringify({
+          usuarios: selectedIds.map((usuarioId) => ({
+            usuarioId,
+            permissao: data.get(`permissao-${usuarioId}`) as ProjectPermission,
+          })),
+          ...(data.get("confirmarRemocoes")
+            ? { confirmarDesativacaoUsuarioIds: removedIds }
+            : {}),
+        }),
+      });
+      setLinks(await apiFetch(`/projetos/${projectId}/usuarios`));
+      notifySuccess("Permissões atualizadas.");
+    } catch (caught: unknown) {
+      setError(errorMessage(caught));
+    } finally {
+      setSaving(false);
+    }
   }
 
   const linked = new Map(links.map((link) => [link.usuario.id, link.permissao]));
-  function clearMessages() { setError(null); setSuccess(null); }
-  return <RoleGate allow={["ADMIN_EMPRESA"]}><AppShell>
-    <p className="text-sm font-semibold text-primary">Administração</p><h1 className="mt-1 text-3xl font-bold tracking-tight">Usuários e acessos</h1>
-    {error && <div className="mt-6"><PageMessage message={error} /></div>}{success && <div className="mt-6 rounded-xl border border-success-100 bg-success-50 px-4 py-3 text-sm text-success-800">{success}</div>}
-    <section className="mt-8 rounded-2xl bg-white p-6 shadow-sm"><h2 className="text-xl font-bold">Novo usuário</h2><p className="mt-1 text-sm text-ink-500">O primeiro projeto é obrigatório; outros acessos podem ser adicionados abaixo.</p><form onSubmit={createUser} className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-5"><Field name="nome" label="Nome" required minLength={2} /><Field name="email" label="E-mail" required type="email" /><Field name="senha" label="Senha temporária" required type="password" minLength={8} /><SelectProject projects={projects} /><PermissionSelect name="permissao" defaultValue="VISUALIZAR" /><button disabled={saving || projects.length === 0} className="rounded-xl bg-primary px-5 py-3 font-semibold text-white disabled:opacity-60 md:col-span-2 xl:col-span-5">{saving ? "Salvando..." : "Criar usuário"}</button></form></section>
-    <section className="mt-8 rounded-2xl bg-white p-6 shadow-sm"><h2 className="text-xl font-bold">Permissões por projeto</h2><label className="mt-5 grid max-w-xl gap-2 text-sm font-medium">Projeto<select value={projectId} onChange={(event) => { setProjectId(event.target.value); setLinks([]); }} className="rounded-xl border border-ink-300 bg-white px-3 py-2"><option value="">Selecione</option>{projects.map((project) => <option key={project.id} value={project.id}>{project.nome}</option>)}</select></label>{projectId && <form onSubmit={updateAccess} className="mt-6"><div className="grid gap-3">{commonUsers.map((user) => <div key={user.id} className="grid items-center gap-3 rounded-xl border border-ink-200 p-4 md:grid-cols-[1fr_auto_auto]"><div><p className="font-semibold">{user.nome}</p><p className="text-sm text-ink-500">{user.email}</p></div><label className="flex items-center gap-2 text-sm"><input type="checkbox" name="usuarioId" value={user.id} defaultChecked={linked.has(user.id)} key={`${projectId}-${user.id}-${linked.has(user.id)}`} /> Vinculado</label><PermissionSelect name={`permissao-${user.id}`} defaultValue={linked.get(user.id) ?? "VISUALIZAR"} /></div>)}</div><label className="mt-5 flex items-start gap-2 text-sm text-warning-800"><input type="checkbox" name="confirmarRemocoes" className="mt-1" /> Confirmo a desativação de usuários que perderem seu último projeto.</label><button disabled={saving} className="mt-5 rounded-xl bg-primary px-5 py-3 font-semibold text-white disabled:opacity-60">Salvar permissões</button></form>}</section>
-  </AppShell></RoleGate>;
-}
 
-function message(error: unknown) { return error instanceof Error ? error.message : "Não foi possível concluir a operação."; }
-function Field({ label, name, ...props }: React.InputHTMLAttributes<HTMLInputElement> & { label: string; name: string }) { return <label className="grid gap-2 text-sm font-medium">{label}<input name={name} className="rounded-xl border border-ink-300 px-3 py-2" {...props} /></label>; }
-function SelectProject({ projects }: { projects: Project[] }) { return <label className="grid gap-2 text-sm font-medium">Projeto<select required name="projetoId" className="rounded-xl border border-ink-300 bg-white px-3 py-2"><option value="">Selecione</option>{projects.map((project) => <option key={project.id} value={project.id}>{project.nome}</option>)}</select></label>; }
-function PermissionSelect({ name, defaultValue }: { name: string; defaultValue: ProjectPermission }) { return <label className="grid gap-2 text-sm font-medium">Permissão<select name={name} defaultValue={defaultValue} className="rounded-xl border border-ink-300 bg-white px-3 py-2"><option value="VISUALIZAR">Visualizar</option><option value="EDITAR">Editar</option></select></label>; }
+  return (
+    <RoleGate allow={["ADMIN_EMPRESA"]}>
+      <AppShell>
+        <p className="text-sm font-semibold text-primary">Administração</p>
+        <h1 className="mt-1 text-3xl font-bold tracking-tight">Usuários e acessos</h1>
+
+        {error && (
+          <div className="mt-6">
+            <PageMessage message={error} />
+          </div>
+        )}
+
+        <section className="mt-8 rounded-2xl border border-border bg-surface p-6 shadow-sm">
+          <h2 className="text-xl font-bold">Novo usuário</h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            O primeiro projeto é obrigatório; outros acessos podem ser adicionados abaixo.
+          </p>
+          <form
+            onSubmit={createUser}
+            className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-5"
+          >
+            <Input name="nome" label="Nome" required minLength={2} />
+            <Input name="email" label="E-mail" required type="email" />
+            <Input
+              name="senha"
+              label="Senha temporária"
+              required
+              type="password"
+              minLength={8}
+            />
+            <Select
+              name="projetoId"
+              label="Projeto"
+              required
+              placeholder="Selecione"
+              options={projects.map((project) => ({
+                value: project.id,
+                label: project.nome,
+              }))}
+            />
+            <Select
+              name="permissao"
+              label="Permissão"
+              defaultValue="VISUALIZAR"
+              placeholder={null}
+              options={PERMISSION_OPTIONS}
+            />
+            <Button
+              type="submit"
+              disabled={saving || projects.length === 0}
+              className="justify-self-end sm:col-span-2 lg:col-span-5"
+            >
+              {saving ? "Salvando..." : "Criar usuário"}
+            </Button>
+          </form>
+        </section>
+
+        <section className="mt-8 rounded-2xl border border-border bg-surface p-6 shadow-sm">
+          <h2 className="text-xl font-bold">Permissões por projeto</h2>
+
+          <div className="mt-5 max-w-md">
+            <Select
+              label="Projeto"
+              placeholder="Selecione"
+              value={projectId}
+              onChange={(event) => {
+                setProjectId(event.target.value);
+                setLinks([]);
+              }}
+              options={projects.map((project) => ({
+                value: project.id,
+                label: project.nome,
+              }))}
+            />
+          </div>
+
+          {projectId && (
+            <form onSubmit={updateAccess} className="mt-6">
+              {commonUsers.length === 0 ? (
+                <EmptyState>Nenhum usuário ativo disponível.</EmptyState>
+              ) : (
+                <RowList>
+                  {commonUsers.map((user) => (
+                    <ListRow
+                      key={user.id}
+                      title={user.nome}
+                      detail={user.email}
+                      meta={
+                        <div className="flex items-center gap-4">
+                          <Checkbox
+                            key={`${projectId}-${user.id}-${linked.has(user.id)}`}
+                            name="usuarioId"
+                            value={user.id}
+                            defaultChecked={linked.has(user.id)}
+                            label="Vinculado"
+                          />
+                          <Select
+                            key={`${projectId}-${user.id}-${linked.get(user.id) ?? ""}`}
+                            name={`permissao-${user.id}`}
+                            defaultValue={linked.get(user.id) ?? "VISUALIZAR"}
+                            placeholder={null}
+                            className="w-40"
+                            options={PERMISSION_OPTIONS}
+                          />
+                        </div>
+                      }
+                    />
+                  ))}
+                </RowList>
+              )}
+
+              <div className="mt-5 rounded-lg border border-warning-100 bg-warning-50 px-4 py-3">
+                <Checkbox
+                  name="confirmarRemocoes"
+                  label="Confirmo a desativação de usuários que perderem seu último projeto."
+                  className="text-warning-800"
+                />
+              </div>
+
+              <div className="mt-5 flex justify-end">
+                <Button type="submit" disabled={saving}>
+                  {saving ? "Salvando..." : "Salvar permissões"}
+                </Button>
+              </div>
+            </form>
+          )}
+        </section>
+      </AppShell>
+    </RoleGate>
+  );
+}

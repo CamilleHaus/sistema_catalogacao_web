@@ -19,6 +19,7 @@ import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react
 import {
   Badge,
   Button,
+  FileField,
   IconButton,
   Input,
   Modal,
@@ -30,6 +31,7 @@ import {
   type TabItem,
 } from "@/components/ui";
 import { apiFetch } from "@/lib/api-client";
+import { resolveUploads } from "@/lib/uploads";
 import { errorMessage } from "@/lib/work";
 import type {
   AttachmentType,
@@ -204,7 +206,7 @@ export function WorkMedia({
           isEmpty={items.length === 0}
           emptyText="Nenhuma imagem cadastrada nesta obra."
         >
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          <div className="grid gap-4 grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6">
             {items.map((item) => (
               <ImageCard
                 key={`${item.origem}-${item.id}`}
@@ -314,35 +316,31 @@ export function WorkMedia({
             onSubmit={async (event: FormEvent<HTMLFormElement>) => {
               event.preventDefault();
               const form = new FormData(event.currentTarget);
-              const body = {
-                imagemUrl: form.get("imagemUrl"),
-                creditos: optional(form, "creditos"),
-                observacoes: optional(form, "observacoes"),
-              };
-              const ok = await action(
-                () =>
-                  editingImage
-                    ? apiFetch(`${base}/imagens/${editingImage.id}`, {
-                        method: "PATCH",
-                        body: JSON.stringify(body),
-                      })
-                    : apiFetch(`${base}/imagens`, {
-                        method: "POST",
-                        body: JSON.stringify(body),
-                      }),
-                Boolean(editingImage?.principal),
-              );
+              const ok = await action(async () => {
+                await resolveUploads(projetoId, form);
+                const body = {
+                  imagemUrl: form.get("imagemUrl"),
+                  creditos: optional(form, "creditos"),
+                  observacoes: optional(form, "observacoes"),
+                };
+                return editingImage
+                  ? apiFetch(`${base}/imagens/${editingImage.id}`, {
+                      method: "PATCH",
+                      body: JSON.stringify(body),
+                    })
+                  : apiFetch(`${base}/imagens`, {
+                      method: "POST",
+                      body: JSON.stringify(body),
+                    });
+              }, Boolean(editingImage?.principal));
               if (ok) setEditing(null);
             }}
           >
-            <Input
+            <FileField
               name="imagemUrl"
-              label="URL da imagem"
-              type="url"
+              label="Imagem"
               required
-              autoFocus
-              defaultValue={editingImage?.imagemUrl ?? ""}
-              placeholder="https://..."
+              currentUrl={editingImage?.imagemUrl}
             />
             <Input
               name="creditos"
@@ -383,13 +381,14 @@ export function WorkMedia({
             onSubmit={async (event: FormEvent<HTMLFormElement>) => {
               event.preventDefault();
               const form = new FormData(event.currentTarget);
-              const body = {
-                arquivoUrl: form.get("arquivoUrl"),
-                tipo: form.get("tipo"),
-                observacoes: optional(form, "observacoes"),
-              };
-              const ok = await action(() =>
-                editingAttachment
+              const ok = await action(async () => {
+                await resolveUploads(projetoId, form);
+                const body = {
+                  arquivoUrl: form.get("arquivoUrl"),
+                  tipo: form.get("tipo"),
+                  observacoes: optional(form, "observacoes"),
+                };
+                return editingAttachment
                   ? apiFetch(`${base}/anexos/${editingAttachment.id}`, {
                       method: "PATCH",
                       body: JSON.stringify(body),
@@ -397,19 +396,17 @@ export function WorkMedia({
                   : apiFetch(`${base}/anexos`, {
                       method: "POST",
                       body: JSON.stringify(body),
-                    }),
-              );
+                    });
+              });
               if (ok) setEditing(null);
             }}
           >
-            <Input
+            <FileField
               name="arquivoUrl"
-              label="URL do arquivo"
-              type="url"
+              label="Arquivo"
+              accept="anexo"
               required
-              autoFocus
-              defaultValue={editingAttachment?.arquivoUrl ?? ""}
-              placeholder="https://..."
+              currentUrl={editingAttachment?.arquivoUrl}
             />
             <Select
               name="tipo"
@@ -456,77 +453,93 @@ function ImageCard({
 
   return (
     <article className="flex flex-col overflow-hidden rounded-xl border border-border bg-surface shadow-sm">
-      <a
-        href={item.imagemUrl}
-        target="_blank"
-        rel="noopener noreferrer"
-        aria-label={
-          item.origem === "ASSINATURA" ? "Abrir assinatura" : "Abrir imagem"
-        }
-      >
-        <span
-          role="img"
+      <div className="relative">
+        <a
+          href={item.imagemUrl}
+          target="_blank"
+          rel="noopener noreferrer"
           aria-label={
-            item.origem === "ASSINATURA" ? "Assinatura" : "Imagem da obra"
+            item.origem === "ASSINATURA" ? "Abrir assinatura" : "Abrir imagem"
           }
-          className="block aspect-square bg-ink-100 bg-cover bg-center"
-          style={{ backgroundImage: `url(${JSON.stringify(item.imagemUrl)})` }}
-        />
-      </a>
+        >
+          <span
+            role="img"
+            aria-label={
+              item.origem === "ASSINATURA" ? "Assinatura" : "Imagem da obra"
+            }
+            className="block aspect-square bg-ink-100 bg-cover bg-center"
+            style={{ backgroundImage: `url(${JSON.stringify(item.imagemUrl)})` }}
+          />
+        </a>
 
-      <div className="flex flex-1 flex-col gap-2 p-4">
-        <div className="flex flex-wrap gap-1.5">
-          {item.principal && (
-            <Badge tone="brand" icon={<Star />}>
-              Principal
-            </Badge>
-          )}
-          {item.origem === "ASSINATURA" && (
-            <Badge tone="neutral">Assinatura</Badge>
-          )}
-        </div>
-
-        {item.creditos && (
-          <p className="text-xs text-muted-foreground">{item.creditos}</p>
-        )}
-        {item.observacoes && (
-          <p className="text-xs text-muted-foreground">{item.observacoes}</p>
+        {item.principal && (
+          <Badge
+            tone="brand"
+            icon={<Star className="size-3" />}
+            className="absolute top-2 left-2 bg-surface shadow-sm"
+          >
+            Principal
+          </Badge>
         )}
 
         {editable && (
-          <div className="mt-auto flex flex-wrap items-center gap-1 pt-2">
-            {!item.principal && (
-              <Button
-                size="sm"
-                variant="secondary"
-                disabled={busy}
-                icon={<Star className="size-4" />}
-                onClick={onMakePrimary}
-              >
-                Tornar principal
-              </Button>
-            )}
-            <Button
+          <div className="absolute top-2 right-2 flex items-center gap-1">
+            <IconButton
+              aria-label="Editar imagem"
               size="sm"
-              variant="ghost"
+              variant="secondary"
               disabled={busy}
-              icon={<Pencil className="size-4" />}
               onClick={onEdit}
+              className="bg-surface shadow-sm"
             >
-              Editar
-            </Button>
+              <Pencil className="size-4" />
+            </IconButton>
             <IconButton
               aria-label="Excluir imagem"
               size="sm"
               variant="dangerGhost"
               disabled={busy}
               onClick={onDelete}
+              className="bg-surface shadow-sm"
             >
               <Trash2 className="size-4" />
             </IconButton>
           </div>
         )}
       </div>
+
+      {(item.origem === "ASSINATURA" ||
+        item.creditos ||
+        item.observacoes ||
+        (editable && !item.principal)) && (
+        <div className="flex flex-1 flex-col gap-2 p-3">
+          {item.origem === "ASSINATURA" && (
+            <Badge tone="neutral" className="self-start">
+              Assinatura
+            </Badge>
+          )}
+
+          {item.creditos && (
+            <p className="text-xs text-muted-foreground">{item.creditos}</p>
+          )}
+          {item.observacoes && (
+            <p className="text-xs text-muted-foreground">{item.observacoes}</p>
+          )}
+
+          {editable && !item.principal && (
+            <Button
+              size="sm"
+              variant="secondary"
+              disabled={busy}
+              icon={<Star className="size-4" />}
+              onClick={onMakePrimary}
+              className="mt-auto self-start"
+            >
+              Tornar principal
+            </Button>
+          )}
+        </div>
+      )}
     </article>
   );
 }

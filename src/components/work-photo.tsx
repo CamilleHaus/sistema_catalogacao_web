@@ -2,8 +2,8 @@
 
 import { ImageOff, Pencil, Trash2 } from "lucide-react";
 import { useState, type FormEvent } from "react";
-import { Button, Input, Modal } from "@/components/ui";
-import { apiFetch } from "@/lib/api-client";
+import { Button, FilePicker, Input, Modal, useFilePick } from "@/components/ui";
+import { apiFetch, uploadProjectFile } from "@/lib/api-client";
 import { errorMessage, optionalText } from "@/lib/work";
 import type { Work } from "@/types/domain";
 
@@ -24,7 +24,13 @@ export function WorkPhoto({
 }) {
   const [editing, setEditing] = useState(false);
   const [busy, setBusy] = useState(false);
+  const pick = useFilePick("imagem");
   const base = `/projetos/${projetoId}/obras/${work.id}/foto-principal`;
+
+  function closeModal() {
+    pick.clear();
+    setEditing(false);
+  }
 
   async function run(action: () => Promise<unknown>) {
     setBusy(true);
@@ -32,7 +38,7 @@ export function WorkPhoto({
     try {
       await action();
       await onSaved();
-      setEditing(false);
+      closeModal();
     } catch (caught: unknown) {
       onError(errorMessage(caught));
     } finally {
@@ -43,15 +49,22 @@ export function WorkPhoto({
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const data = new FormData(event.currentTarget);
-    await run(() =>
-      apiFetch(base, {
+    const choice = pick.files[0];
+    if (!choice && !work.fotoPrincipalUrl) {
+      pick.setProblem("Escolha uma imagem.");
+      return;
+    }
+    await run(async () => {
+      // Sobe o arquivo primeiro: a obra só passa a apontar para a nova imagem
+      // depois que ela existe no storage.
+      const url = choice
+        ? (await uploadProjectFile(projetoId, choice)).url
+        : work.fotoPrincipalUrl;
+      await apiFetch(base, {
         method: "PUT",
-        body: JSON.stringify({
-          url: data.get("url"),
-          creditos: optionalText(data, "creditos"),
-        }),
-      }),
-    );
+        body: JSON.stringify({ url, creditos: optionalText(data, "creditos") }),
+      });
+    });
   }
 
   const image = work.fotoPrincipalUrl ? (
@@ -105,7 +118,7 @@ export function WorkPhoto({
         <Modal
           title="Foto principal"
           description="A imagem de capa exibida na listagem do acervo."
-          onClose={() => setEditing(false)}
+          onClose={closeModal}
           footer={
             <>
               {work.fotoPrincipalUrl && (
@@ -113,31 +126,43 @@ export function WorkPhoto({
                   variant="dangerGhost"
                   disabled={busy}
                   icon={<Trash2 className="size-4" />}
-                  onClick={() => run(() => apiFetch(base, { method: "DELETE" }))}
+                  onClick={() =>
+                    run(() => apiFetch(base, { method: "DELETE" }))
+                  }
                   className="mr-auto"
                 >
                   Remover foto
                 </Button>
               )}
-              <Button variant="secondary" onClick={() => setEditing(false)}>
+              <Button variant="secondary" onClick={closeModal}>
                 Cancelar
               </Button>
               <Button type="submit" form={EDIT_FORM_ID} disabled={busy}>
-                {busy ? "Salvando..." : "Salvar"}
+                {busy ? "Enviando..." : "Salvar"}
               </Button>
             </>
           }
         >
           <form id={EDIT_FORM_ID} onSubmit={save} className="grid gap-4">
-            <Input
-              label="URL da imagem"
-              type="url"
-              name="url"
-              required
-              autoFocus
-              defaultValue={work.fotoPrincipalUrl ?? ""}
-              placeholder="https://..."
-            />
+            <div className="grid gap-1.5">
+              <span className="text-sm font-medium text-ink-700">Imagem</span>
+
+              <FilePicker
+                accept="imagem"
+                files={pick.files}
+                onFiles={pick.choose}
+                disabled={busy}
+                invalid={Boolean(pick.problem)}
+                currentUrl={work.fotoPrincipalUrl}
+              />
+
+              {pick.problem && (
+                <p className="text-xs font-medium text-danger-700">
+                  {pick.problem}
+                </p>
+              )}
+            </div>
+
             <Input
               label="Créditos"
               name="creditos"
