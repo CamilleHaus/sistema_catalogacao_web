@@ -2,6 +2,7 @@
 
 import type { LucideIcon } from "lucide-react";
 import { LogOut, Settings, SquareLibrary, Users } from "lucide-react";
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import type { ReactNode } from "react";
@@ -53,9 +54,21 @@ export function AppShell({ children }: { children: ReactNode }) {
         <div className="mx-auto flex max-w-[100rem] items-center justify-between gap-6 px-5 py-3 sm:px-8 lg:px-12">
           <Link
             href={homeForRole(user.papel)}
-            className="shrink-0 text-lg font-bold tracking-tight text-white"
+            className="-my-3 flex shrink-0 self-stretch"
           >
-            Catálogo
+            {/* Só o símbolo, recortado na altura do M: o -my-3 + self-stretch
+                fazem o M ir de borda a borda do header; os blocos que passam
+                acima e abaixo dele ficam de fora do recorte. O translate puxa
+                os blocos à esquerda do M (~19,5% da largura) para a margem,
+                alinhando a haste do M com o título da página. */}
+            <Image
+              src="/logo-mille-simbolo.png"
+              alt="mille catalogação"
+              width={323}
+              height={144}
+              priority
+              className="h-full w-auto -translate-x-[19.5%]"
+            />
           </Link>
 
           <nav className="flex flex-1 items-center gap-1 overflow-x-auto">

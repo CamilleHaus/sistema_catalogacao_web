@@ -17,6 +17,8 @@ export function MultiSelect({
   name,
   options,
   defaultValue = [],
+  value,
+  onChange,
   hint,
   placeholder = "Selecione...",
   searchPlaceholder = "Buscar...",
@@ -27,13 +29,17 @@ export function MultiSelect({
   name: string;
   options: SelectOption[];
   defaultValue?: string[];
+  /** Modo controlado: quem chama guarda a seleção (fora de um `<form>`). */
+  value?: string[];
+  onChange?: (value: string[]) => void;
   hint?: string;
   placeholder?: string;
   searchPlaceholder?: string;
   emptyLabel?: string;
   className?: string;
 }) {
-  const [selected, setSelected] = useState<string[]>(defaultValue);
+  const [internal, setInternal] = useState<string[]>(defaultValue);
+  const selected = value ?? internal;
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
   const baseId = useId();
@@ -65,12 +71,12 @@ export function MultiSelect({
 
   const chosen = options.filter((option) => selected.includes(option.value));
 
-  function toggle(value: string) {
-    setSelected((current) =>
-      current.includes(value)
-        ? current.filter((item) => item !== value)
-        : [...current, value],
-    );
+  function toggle(option: string) {
+    const next = selected.includes(option)
+      ? selected.filter((item) => item !== option)
+      : [...selected, option];
+    setInternal(next);
+    onChange?.(next);
   }
 
   return (

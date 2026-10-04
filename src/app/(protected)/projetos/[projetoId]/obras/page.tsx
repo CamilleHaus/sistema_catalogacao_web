@@ -1,7 +1,18 @@
 "use client";
 
 import type { LucideIcon } from "lucide-react";
-import { Images, Plus, Search, SearchX, Sparkles } from "lucide-react";
+import {
+  Download,
+  Images,
+  Pencil,
+  PencilLine,
+  Plus,
+  Search,
+  SearchX,
+  SlidersHorizontal,
+  Sparkles,
+  X,
+} from "lucide-react";
 import { useParams } from "next/navigation";
 import {
   useCallback,
@@ -11,7 +22,10 @@ import {
   type FormEvent,
   type ReactNode,
 } from "react";
+import { AdvancedSearchModal } from "@/components/advanced-search-modal";
 import { AppShell } from "@/components/app-shell";
+import { BulkEditModal } from "@/components/bulk-edit-modal";
+import { ExportModal } from "@/components/export-modal";
 import { EmptyState } from "@/components/empty-state";
 import { PageMessage } from "@/components/page-message";
 import { RoleGate } from "@/components/role-gate";
@@ -29,7 +43,13 @@ import {
   Select,
   SkeletonCard,
 } from "@/components/ui";
+import {
+  describeParts,
+  readFilterFromUrl,
+  writeFilterToUrl,
+} from "@/lib/advanced-search";
 import { apiFetch } from "@/lib/api-client";
+import { notifySuccess } from "@/lib/toast";
 import { cn } from "@/lib/cn";
 import {
   errorMessage,
@@ -39,9 +59,12 @@ import {
 } from "@/lib/work";
 import { useAuthStore } from "@/stores/auth-store";
 import type {
+  AdvancedFilter,
   Artist,
   LocationNode,
   Project,
+  SavedSearchFilter,
+  SearchFieldDef,
   Technique,
   Work,
   WorkStatus,
@@ -68,9 +91,19 @@ export default function WorksPage() {
   const [creating, setCreating] = useState(false);
   const [creatingArtist, setCreatingArtist] = useState(false);
   const [query, setQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState("");
-  const [techniqueFilter, setTechniqueFilter] = useState("");
+  const [bulkEditing, setBulkEditing] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const [artistFilter, setArtistFilter] = useState("");
+  // Busca avançada: o filtro ativo (e de qual filtro salvo veio) e o resultado
+  // vindo da API, sobre o qual os filtros rápidos acima continuam valendo.
+  const [searchFields, setSearchFields] = useState<SearchFieldDef[] | null>(null);
+  const [savedFilters, setSavedFilters] = useState<SavedSearchFilter[]>([]);
+  const [advanced, setAdvanced] = useState<{
+    filter: AdvancedFilter;
+    savedId: string | null;
+  } | null>(null);
+  const [advancedWorks, setAdvancedWorks] = useState<Work[] | null>(null);
+  const [advancedOpen, setAdvancedOpen] = useState(false);
 
   const load = useCallback(
     () =>
@@ -95,9 +128,95 @@ export default function WorksPage() {
     };
   }, [load]);
 
+  const searchBase = `/projetos/${projetoId}/busca-avancada`;
+
+  const loadSavedFilters = useCallback(
+    () =>
+      apiFetch<SavedSearchFilter[]>(`${searchBase}/filtros`).then(
+        setSavedFilters,
+      ),
+    [searchBase],
+  );
+
+  useEffect(() => {
+    let active = true;
+    apiFetch<SearchFieldDef[]>(`${searchBase}/campos`)
+      .then((result) => active && setSearchFields(result))
+      .catch((caught: unknown) => active && setError(errorMessage(caught)));
+    loadSavedFilters().catch(
+      (caught: unknown) => active && setError(errorMessage(caught)),
+    );
+    return () => {
+      active = false;
+    };
+  }, [searchBase, loadSavedFilters]);
+
+  // Abrir um link com ?busca=... já mostra o acervo filtrado.
+  useEffect(() => {
+    const filter = readFilterFromUrl();
+    if (!filter) return;
+    let active = true;
+    apiFetch<Work[]>(searchBase, { method: "POST", body: JSON.stringify(filter) })
+      .then((result) => {
+        if (!active) return;
+        setAdvanced({ filter, savedId: null });
+        setAdvancedWorks(result);
+      })
+      .catch((caught: unknown) => {
+        if (!active) return;
+        writeFilterToUrl(null);
+        setError(errorMessage(caught));
+      });
+    return () => {
+      active = false;
+    };
+  }, [searchBase]);
+
+  async function runAdvanced(filter: AdvancedFilter | null, savedId: string | null) {
+    setAdvancedOpen(false);
+    setError(null);
+    if (!filter) {
+      setAdvanced(null);
+      setAdvancedWorks(null);
+      writeFilterToUrl(null);
+      return;
+    }
+    setAdvanced({ filter, savedId });
+    setAdvancedWorks(null);
+    writeFilterToUrl(filter);
+    try {
+      setAdvancedWorks(
+        await apiFetch<Work[]>(searchBase, {
+          method: "POST",
+          body: JSON.stringify(filter),
+        }),
+      );
+    } catch (caught: unknown) {
+      setAdvanced(null);
+      writeFilterToUrl(null);
+      setError(errorMessage(caught));
+    }
+  }
+
+  /** Tira uma condição da busca ativa; a última leva junto o filtro inteiro. */
+  function removeCondition(index: number) {
+    if (!advanced) return;
+    const condicoes = advanced.filter.condicoes.filter((_, position) => position !== index);
+    // Deixou de ser o filtro salvo como foi gravado.
+    void runAdvanced(condicoes.length ? { ...advanced.filter, condicoes } : null, null);
+  }
+
   const refresh = useCallback(async () => {
     setData(await load());
-  }, [load]);
+    // Obra nova pode entrar (ou não) no resultado da busca ativa.
+    if (advanced)
+      setAdvancedWorks(
+        await apiFetch<Work[]>(searchBase, {
+          method: "POST",
+          body: JSON.stringify(advanced.filter),
+        }),
+      );
+  }, [load, advanced, searchBase]);
 
   const [project, works, artists, statuses, techniques, locationTree] =
     data ?? [];
@@ -107,11 +226,19 @@ export default function WorksPage() {
   );
   const canEdit =
     user?.papel === "ADMIN_EMPRESA" || project?.permissao === "EDITAR";
-  const loading = data === null;
+  const loading = data === null || (advanced !== null && advancedWorks === null);
+  const baseWorks = advanced ? advancedWorks : works;
+  const fieldsById = useMemo(
+    () => new Map((searchFields ?? []).map((field) => [field.id, field])),
+    [searchFields],
+  );
+  const activeSaved = advanced?.savedId
+    ? savedFilters.find((item) => item.id === advanced.savedId)
+    : undefined;
 
   const artistRows = useMemo(() => {
     const counts = new Map<string, number>();
-    for (const work of works ?? []) {
+    for (const work of baseWorks ?? []) {
       for (const artist of work.artistas) {
         counts.set(artist.id, (counts.get(artist.id) ?? 0) + 1);
       }
@@ -119,22 +246,26 @@ export default function WorksPage() {
     return (artists ?? [])
       .map((artist) => ({ artist, count: counts.get(artist.id) ?? 0 }))
       .sort((a, b) => b.count - a.count || a.artist.nome.localeCompare(b.artist.nome));
-  }, [works, artists]);
+  }, [baseWorks, artists]);
 
   const visibleWorks = useMemo(() => {
     const term = query.trim().toLowerCase();
-    return (works ?? []).filter((work) => {
-      if (statusFilter && work.status?.id !== statusFilter) return false;
-      if (techniqueFilter && work.tecnica?.id !== techniqueFilter) return false;
+    return (baseWorks ?? []).filter((work) => {
       if (artistFilter && !work.artistas.some((artist) => artist.id === artistFilter))
         return false;
       return !term || workSearchIndex(work).includes(term);
     });
-  }, [works, query, statusFilter, techniqueFilter, artistFilter]);
+  }, [baseWorks, query, artistFilter]);
 
   const filtering = Boolean(
-    query.trim() || statusFilter || techniqueFilter || artistFilter,
+    query.trim() || artistFilter || advanced,
   );
+
+  function clearFilters() {
+    setQuery("");
+    setArtistFilter("");
+    void runAdvanced(null, null);
+  }
 
   async function create(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -220,29 +351,100 @@ export default function WorksPage() {
                     className="pl-9"
                   />
                 </div>
-                <Select
-                  value={statusFilter}
-                  onChange={(event) => setStatusFilter(event.target.value)}
-                  aria-label="Filtrar por status"
-                  placeholder="Todos os status"
-                  className="sm:w-48"
-                  options={(statuses ?? []).map((item) => ({
-                    value: item.id,
-                    label: item.nome,
-                  }))}
-                />
-                <Select
-                  value={techniqueFilter}
-                  onChange={(event) => setTechniqueFilter(event.target.value)}
-                  aria-label="Filtrar por técnica"
-                  placeholder="Todas as técnicas"
-                  className="sm:w-48"
-                  options={(techniques ?? []).map((item) => ({
-                    value: item.id,
-                    label: item.nome,
-                  }))}
-                />
+                <Button
+                  variant="secondary"
+                  icon={<SlidersHorizontal className="size-4" />}
+                  disabled={!searchFields}
+                  onClick={() => setAdvancedOpen(true)}
+                  className="shrink-0"
+                >
+                  Busca avançada
+                  {advanced && (
+                    <Badge tone="brand">{advanced.filter.condicoes.length}</Badge>
+                  )}
+                </Button>
+                {canEdit && (
+                  <Button
+                    variant="secondary"
+                    icon={<PencilLine className="size-4" />}
+                    disabled={loading || visibleWorks.length === 0}
+                    onClick={() => setBulkEditing(true)}
+                    className="shrink-0"
+                  >
+                    Editar em massa
+                  </Button>
+                )}
+                <Button
+                  variant="secondary"
+                  icon={<Download className="size-4" />}
+                  disabled={loading}
+                  onClick={() => setExporting(true)}
+                  className="shrink-0"
+                >
+                  Exportar
+                </Button>
               </div>
+
+              {advanced && (
+                <div className="mt-3 flex flex-col gap-3 rounded-xl border border-border bg-surface px-4 py-3 shadow-xs sm:flex-row sm:items-start">
+                  <span className="hidden size-9 shrink-0 place-items-center rounded-lg bg-primary-50 text-primary-800 sm:grid">
+                    <SlidersHorizontal aria-hidden className="size-4" />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="flex flex-wrap items-baseline gap-x-2 text-sm">
+                      <span className="font-semibold text-foreground">
+                        {activeSaved?.nome ?? "Busca avançada"}
+                      </span>
+                      {advancedWorks && (
+                        <span className="text-muted-foreground">
+                          {advancedWorks.length}{" "}
+                          {advancedWorks.length === 1 ? "obra encontrada" : "obras encontradas"}
+                        </span>
+                      )}
+                    </p>
+                    <ul className="mt-2 flex flex-wrap gap-1.5">
+                      {advanced.filter.condicoes.map((condition, index) => {
+                        const field = fieldsById.get(condition.campo);
+                        const parts = field
+                          ? describeParts(condition, field)
+                          : { label: condition.campo, value: "" };
+                        return (
+                          <li
+                            key={index}
+                            className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-border bg-surface-muted py-1 pr-1 pl-3 text-xs"
+                          >
+                            <span className="shrink-0 text-muted-foreground">{parts.label}</span>
+                            <span className="truncate font-semibold text-foreground">
+                              {parts.value}
+                            </span>
+                            <button
+                              type="button"
+                              aria-label={`Remover a condição ${parts.label}`}
+                              onClick={() => removeCondition(index)}
+                              className="grid size-5 shrink-0 cursor-pointer place-items-center rounded-full text-ink-500 transition-colors hover:bg-ink-200 hover:text-foreground"
+                            >
+                              <X aria-hidden className="size-3" />
+                            </button>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-1">
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      icon={<Pencil className="size-3.5" />}
+                      onClick={() => setAdvancedOpen(true)}
+                    >
+                      Editar
+                    </Button>
+                    <Button size="sm" variant="ghost" onClick={() => runAdvanced(null, null)}>
+                      Limpar
+                    </Button>
+                  </div>
+                </div>
+              )}
 
               <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
                 {loading ? (
@@ -256,15 +458,7 @@ export default function WorksPage() {
                         icon={SearchX}
                         title="Nenhum resultado"
                         action={
-                          <Button
-                            variant="secondary"
-                            onClick={() => {
-                              setQuery("");
-                              setStatusFilter("");
-                              setTechniqueFilter("");
-                              setArtistFilter("");
-                            }}
-                          >
+                          <Button variant="secondary" onClick={clearFilters}>
                             Limpar filtros
                           </Button>
                         }
@@ -305,7 +499,7 @@ export default function WorksPage() {
             {!loading && (
               <ArtistSidebar
                 artistRows={artistRows}
-                totalWorks={works?.length ?? 0}
+                totalWorks={baseWorks?.length ?? 0}
                 artistFilter={artistFilter}
                 onSelect={setArtistFilter}
                 canCreate={canEdit}
@@ -314,6 +508,51 @@ export default function WorksPage() {
             )}
           </div>
         </section>
+
+        {exporting && (
+          <ExportModal
+            projetoId={projetoId}
+            // Com busca ou filtro ativo, oferece exportar exatamente o que está na tela.
+            listed={filtering ? visibleWorks.map((work) => work.id) : undefined}
+            onClose={() => setExporting(false)}
+          />
+        )}
+
+        {bulkEditing && (
+          <BulkEditModal
+            projetoId={projetoId}
+            obraIds={visibleWorks.map((work) => work.id)}
+            onClose={() => setBulkEditing(false)}
+            onDone={async (result) => {
+              setBulkEditing(false);
+              notifySuccess(
+                [
+                  `${result.atualizadas} ${result.atualizadas === 1 ? "obra atualizada" : "obras atualizadas"}.`,
+                  result.movimentacoes > 0 &&
+                    `${result.movimentacoes} ${result.movimentacoes === 1 ? "movimentação registrada" : "movimentações registradas"}.`,
+                  result.ignoradas > 0 &&
+                    `${result.ignoradas} sem o registro ${result.ignoradas === 1 ? "ficou" : "ficaram"} de fora.`,
+                ]
+                  .filter(Boolean)
+                  .join(" "),
+              );
+              await refresh();
+            }}
+          />
+        )}
+
+        {advancedOpen && searchFields && (
+          <AdvancedSearchModal
+            projetoId={projetoId}
+            fields={searchFields}
+            initial={advanced?.filter ?? null}
+            savedFilters={savedFilters}
+            activeSavedId={advanced?.savedId ?? null}
+            onApply={runAdvanced}
+            onSavedFiltersChange={loadSavedFilters}
+            onClose={() => setAdvancedOpen(false)}
+          />
+        )}
 
         {creatingArtist && (
           <ArtistRegisterModal

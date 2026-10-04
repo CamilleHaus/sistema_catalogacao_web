@@ -16,6 +16,39 @@ export function optionalNumber(data: FormData, key: string) {
   return typeof value === "string" && value ? Number(value) : undefined;
 }
 
+/**
+ * Lê um número digitado no formato brasileiro e devolve a string decimal que a
+ * API espera ("1234567.89"), ou null se não for um número.
+ *
+ * Aceita "1.000.000,50", "1000000,50", "1.000.000" e o formato da API
+ * ("1000000.50"). Com vírgula, ela é o decimal e os pontos são milhar. Sem
+ * vírgula, o ponto só é decimal quando aparece uma vez e não seguido de
+ * exatamente três dígitos ("1.5" é 1,5; "1.500" é mil e quinhentos).
+ */
+export function parseDecimal(raw: string): string | null {
+  const text = raw.replace(/\s/g, "");
+  if (!text) return null;
+  let normalized: string;
+  if (text.includes(",")) {
+    normalized = text.replace(/\./g, "").replace(",", ".");
+  } else {
+    const dots = text.split(".").length - 1;
+    normalized = dots > 1 || /^\d+\.\d{3}$/.test(text) ? text.replace(/\./g, "") : text;
+  }
+  return /^\d+(\.\d+)?$/.test(normalized) ? normalized : null;
+}
+
+/** Mostra um decimal da API no formato brasileiro ("1234.5" → "1.234,50"). */
+export function formatDecimal(value: string | null | undefined, minFraction = 2) {
+  if (!value) return "";
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return value;
+  return new Intl.NumberFormat("pt-BR", {
+    minimumFractionDigits: minFraction,
+    maximumFractionDigits: 4,
+  }).format(parsed);
+}
+
 /** Achata a árvore de localizações preservando a profundidade para indentação. */
 export function flattenLocations(
   nodes: LocationNode[],

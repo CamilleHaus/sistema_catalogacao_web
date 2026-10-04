@@ -11,6 +11,7 @@ export function PageHeader({
   backHref,
   backLabel = "Voltar",
   backRowActions,
+  variant = "default",
   className,
 }: {
   eyebrow?: ReactNode;
@@ -21,8 +22,12 @@ export function PageHeader({
   backLabel?: string;
   /** Conteúdo à direita, na mesma linha do link de voltar (em vez de ao lado do título). */
   backRowActions?: ReactNode;
+  /** `record`: título menor e descrição maior — a página de um registro, em que
+   * a descrição é dado (o artista da obra), não um texto de apoio. */
+  variant?: "default" | "record";
   className?: string;
 }) {
+  const record = variant === "record";
   return (
     <div className={cn("flex flex-col gap-4", className)}>
       {backHref && (
@@ -44,11 +49,21 @@ export function PageHeader({
               {eyebrow}
             </p>
           )}
-          <h1 className="mt-1.5 text-2xl font-bold tracking-tight text-balance text-foreground sm:text-3xl">
+          <h1
+            className={cn(
+              "mt-1.5 font-bold tracking-tight text-balance text-foreground",
+              record ? "text-xl sm:text-2xl" : "text-2xl sm:text-3xl",
+            )}
+          >
             {title}
           </h1>
           {description && (
-            <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
+            <p
+              className={cn(
+                "max-w-2xl text-muted-foreground",
+                record ? "mt-1 text-base font-medium sm:text-lg" : "mt-2 text-sm",
+              )}
+            >
               {description}
             </p>
           )}

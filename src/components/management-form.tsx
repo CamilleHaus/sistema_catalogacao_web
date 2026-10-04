@@ -119,10 +119,7 @@ const SECTIONS: Record<
         name: "tipo",
         label: "Tipo",
         type: "select",
-        options: () => [
-          { value: "EMBALAGEM", label: "Embalagem" },
-          { value: "TRANSPORTE", label: "Transporte" },
-        ],
+        options: () => INSTRUCTION_TYPES,
       },
       { name: "data", label: "Data" },
       { name: "profissionalResponsavel", label: "Profissional responsável" },
@@ -173,6 +170,17 @@ function flattenLocationOptions(
   ]);
 }
 
+const INSTRUCTION_TYPES = [
+  { value: "EMBALAGEM", label: "Embalagem" },
+  { value: "TRANSPORTE", label: "Transporte" },
+  { value: "MANUSEIO", label: "Manuseio" },
+];
+
+/** Nome do tipo de instrução ("EMBALAGEM" → "Embalagem"). */
+function instructionLabel(value: unknown) {
+  return INSTRUCTION_TYPES.find((type) => type.value === value)?.label ?? text(value);
+}
+
 /** Título do card: o dado mais reconhecível de cada tipo de registro. */
 function titleOf(kind: Kind, item: Item) {
   if (kind === "analises")
@@ -187,7 +195,7 @@ function titleOf(kind: Kind, item: Item) {
   if (kind === "servicos")
     return named(item, "tipoServico") || text(item.data) || "Sem título";
   if (kind === "instrucoes")
-    return text(item.tipo) || text(item.data) || "Sem título";
+    return instructionLabel(item.tipo) || text(item.data) || "Sem título";
 
   const from = text(item.localSaidaSnapshot);
   const to = text(item.localEntradaSnapshot);
@@ -208,6 +216,8 @@ function rowsOf(kind: Kind, item: Item): FactRow[] {
       return ["De", text(item.localSaidaSnapshot)];
     if (field.name === "localEntradaId")
       return ["Para", text(item.localEntradaSnapshot)];
+    if (kind === "instrucoes" && field.name === "tipo")
+      return [field.label, instructionLabel(item.tipo)];
     if (field.type === "date") return [field.label, dateValue(item[field.name])];
     return [field.label, text(item[field.name])];
   });

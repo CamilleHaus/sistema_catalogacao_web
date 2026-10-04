@@ -171,7 +171,23 @@ export function Textarea({
   );
 }
 
-export type SelectOption = { value: string; label: string };
+export type SelectOption = {
+  value: string;
+  label: string;
+  /** Opções seguidas com o mesmo grupo viram um `<optgroup>`. */
+  group?: string;
+};
+
+/** Junta opções consecutivas do mesmo grupo; sem grupo, ficam soltas. */
+function groupOptions(options: SelectOption[]) {
+  const groups: { label?: string; options: SelectOption[] }[] = [];
+  for (const option of options) {
+    const last = groups.at(-1);
+    if (last && last.label === option.group) last.options.push(option);
+    else groups.push({ label: option.group, options: [option] });
+  }
+  return groups;
+}
 
 export type SelectProps = SelectHTMLAttributes<HTMLSelectElement> &
   FieldMeta & {
@@ -220,11 +236,20 @@ export function Select({
           {!multiple && placeholder !== null && (
             <option value="">{placeholder}</option>
           )}
-          {options.map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
+          {groupOptions(options).map((group, index) => {
+            const items = group.options.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ));
+            return group.label ? (
+              <optgroup key={`${group.label}-${index}`} label={group.label}>
+                {items}
+              </optgroup>
+            ) : (
+              items
+            );
+          })}
         </select>
         {!multiple && (
           <ChevronDown

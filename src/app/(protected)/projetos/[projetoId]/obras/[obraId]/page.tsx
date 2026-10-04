@@ -2,6 +2,7 @@
 
 import {
   ClipboardList,
+  Download,
   Images,
   Landmark,
   Microscope,
@@ -13,6 +14,7 @@ import { useParams } from "next/navigation";
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { AppShell } from "@/components/app-shell";
 import { CatalogingForm } from "@/components/cataloging-form";
+import { ExportModal } from "@/components/export-modal";
 import { FinancialForm } from "@/components/financial-form";
 import { ManagementForm } from "@/components/management-form";
 import { PageMessage } from "@/components/page-message";
@@ -66,6 +68,7 @@ export default function WorkDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState("catalogacao");
   const [editing, setEditing] = useState(false);
+  const [exporting, setExporting] = useState(false);
 
   const load = useCallback(async (): Promise<PageData> => {
     const [project, work, locations, artists, statuses, techniques] =
@@ -212,24 +215,43 @@ export default function WorkDetailPage() {
             data ? `Obras de ${data.project.nome}` : "Voltar ao acervo"
           }
           eyebrow={work?.codigoAcervo}
-          title={work ? workTitle(work) : "Carregando..."}
+          variant="record"
+          // Como no card do acervo: "Título, série X, 1980".
+          title={
+            work
+              ? work.data
+                ? `${workTitle(work)}, ${work.data}`
+                : workTitle(work)
+              : "Carregando..."
+          }
           description={
             work?.artistas.map((artist) => artist.nome).join(", ") || undefined
           }
           actions={
-            work &&
-            (canEdit ? (
-              <Button
-                size="sm"
-                variant="secondary"
-                icon={<Pencil className="size-4" />}
-                onClick={() => setEditing(true)}
-              >
-                Editar ficha
-              </Button>
-            ) : (
-              <Badge tone="warning">Somente leitura</Badge>
-            ))
+            work && (
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  icon={<Download className="size-4" />}
+                  onClick={() => setExporting(true)}
+                >
+                  Exportar
+                </Button>
+                {canEdit ? (
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    icon={<Pencil className="size-4" />}
+                    onClick={() => setEditing(true)}
+                  >
+                    Editar ficha
+                  </Button>
+                ) : (
+                  <Badge tone="warning">Somente leitura</Badge>
+                )}
+              </div>
+            )
           }
         />
 
@@ -267,6 +289,14 @@ export default function WorkDetailPage() {
               onChange={setTab}
               className="mt-10"
             />
+
+            {exporting && (
+              <ExportModal
+                projetoId={projetoId}
+                work={{ id: data.work.id, codigo: data.work.codigoAcervo }}
+                onClose={() => setExporting(false)}
+              />
+            )}
 
             {editing && (
               <WorkEditModal

@@ -19,7 +19,7 @@ export function WorkCard({ work, href }: { work: Work; href: string }) {
           <div
             role="img"
             aria-label={`Foto principal de ${work.tituloExibicao}`}
-            className="size-full bg-cover bg-center transition-transform duration-300 group-hover:scale-[1.03]"
+            className="size-full bg-contain bg-center bg-no-repeat transition-transform duration-300 group-hover:scale-[1.03]"
             style={{
               backgroundImage: `url(${JSON.stringify(work.fotoPrincipalUrl)})`,
             }}

@@ -71,7 +71,9 @@ export function WorkPhoto({
     <div
       role="img"
       aria-label={`Foto principal de ${work.tituloExibicao}`}
-      className="size-full bg-cover bg-center"
+      // contain e não cover: a obra aparece inteira, nunca cortada; a sobra
+      // fica com o fundo do card.
+      className="size-full bg-contain bg-center bg-no-repeat"
       style={{
         backgroundImage: `url(${JSON.stringify(work.fotoPrincipalUrl)})`,
       }}
@@ -108,11 +110,6 @@ export function WorkPhoto({
         )}
       </div>
 
-      {work.fotoPrincipalCreditos && (
-        <p className="border-t border-border px-4 py-2.5 text-xs text-muted-foreground">
-          {work.fotoPrincipalCreditos}
-        </p>
-      )}
 
       {editing && (
         <Modal

@@ -25,7 +25,7 @@ import {
 } from "@/components/ui";
 import { apiFetch } from "@/lib/api-client";
 import { resolveUploads } from "@/lib/uploads";
-import { errorMessage } from "@/lib/work";
+import { errorMessage, formatDecimal, parseDecimal } from "@/lib/work";
 import type {
   FinancialDocument,
   FinancialOperation,
@@ -83,18 +83,40 @@ function discountLabel(operation: FinancialOperation) {
     : money(operation.moeda, operation.desconto);
 }
 
+function commissionLabel(operation: FinancialOperation) {
+  if (!operation.comissao || !operation.tipoComissao) return null;
+  return operation.tipoComissao === "PERCENTUAL"
+    ? `${operation.comissao}%`
+    : money(operation.moeda, operation.comissao);
+}
+
+type AdjustmentType = "VALOR_FIXO" | "PERCENTUAL" | "";
+
 /** Prévia do valor final enquanto o usuário digita, no modal da operação. */
-function calculate(value: string, type: string, discount: string) {
-  if (!value) return null;
-  const amount = Number(value);
-  const off = Number(discount || 0);
+function calculate(value: string, type: AdjustmentType, discount: string) {
+  const parsedValue = parseDecimal(value);
+  if (!parsedValue) return null;
+  const amount = Number(parsedValue);
+  const off = Number(parseDecimal(discount) ?? 0);
   const result =
     type === "PERCENTUAL"
       ? amount - (amount * off) / 100
       : type === "VALOR_FIXO"
         ? amount - off
         : amount;
-  return Number.isFinite(result) && result >= 0 ? result.toFixed(2) : null;
+  return Number.isFinite(result) && result >= 0 ? result : null;
+}
+
+/** Prévia da comissão, sobre o valor final — a mesma conta do servidor. */
+function calculateCommission(
+  finalAmount: number | null,
+  type: AdjustmentType,
+  commission: string,
+) {
+  const parsed = parseDecimal(commission);
+  if (finalAmount === null || !parsed || !type) return null;
+  const rate = Number(parsed);
+  return type === "PERCENTUAL" ? (finalAmount * rate) / 100 : rate;
 }
 
 export function FinancialForm({
@@ -187,6 +209,11 @@ export function FinancialForm({
       ["Desconto", discountLabel(operation)],
       ["Valor final", money(operation.moeda, operation.valorFinal)],
     ];
+    if (kind === "aquisicao")
+      rows.push(
+        ["Comissão", commissionLabel(operation)],
+        ["Valor da comissão", money(operation.moeda, operation.valorComissao)],
+      );
     return rows;
   }
 
@@ -607,14 +634,56 @@ export function FinancialForm({
   );
 }
 
-/** Campos vazios viram null, como a API espera. */
+/** Campos digitados no formato brasileiro ("1.000.000,50"). */
+const DECIMAL_FIELDS = new Set(["valor", "desconto", "comissao"]);
+
+/** Campos vazios viram null, como a API espera; valores vão como "1000000.50". */
 function plainPayload(form: FormData) {
   const result: Record<string, unknown> = {};
   form.forEach((raw, key) => {
     const value = typeof raw === "string" ? raw.trim() : raw;
-    result[key] = value || null;
+    result[key] =
+      DECIMAL_FIELDS.has(key) && typeof value === "string"
+        ? // Texto inválido segue como está: a API recusa com mensagem clara.
+          (parseDecimal(value) ?? (value || null))
+        : value || null;
   });
   return result;
+}
+
+/**
+ * Campo de valor que aceita pontos de milhar e vírgula decimal. Ao sair do
+ * campo, o número é reescrito no formato brasileiro para conferência.
+ */
+function DecimalInput({
+  defaultValue,
+  minFraction = 2,
+  onChange,
+  ...props
+}: Omit<React.ComponentProps<typeof Input>, "type" | "defaultValue"> & {
+  defaultValue?: string | null;
+  minFraction?: number;
+}) {
+  return (
+    <Input
+      {...props}
+      type="text"
+      inputMode="decimal"
+      autoComplete="off"
+      placeholder="0,00"
+      defaultValue={formatDecimal(defaultValue, minFraction)}
+      onChange={onChange}
+      onBlur={(event) => {
+        const parsed = parseDecimal(event.target.value);
+        event.target.setCustomValidity(
+          event.target.value.trim() && !parsed
+            ? "Digite um valor como 1.000.000,00."
+            : "",
+        );
+        if (parsed) event.target.value = formatDecimal(parsed, minFraction);
+      }}
+    />
+  );
 }
 
 function MoneyFields({
@@ -633,14 +702,7 @@ function MoneyFields({
         defaultValue={currency ?? ""}
         options={CURRENCIES.map((item) => ({ value: item, label: item }))}
       />
-      <Input
-        name="valor"
-        label="Valor"
-        type="number"
-        min="0"
-        step="0.01"
-        defaultValue={amount ?? ""}
-      />
+      <DecimalInput name="valor" label="Valor" defaultValue={amount} />
     </>
   );
 }
@@ -703,10 +765,18 @@ function OperationModal({
   onClose: () => void;
   onSave: (body: unknown, method: "POST" | "PATCH") => void;
 }) {
-  const [amount, setAmount] = useState(item?.valor ?? "");
-  const [discount, setDiscount] = useState(item?.desconto ?? "");
-  const [discountType, setDiscountType] = useState(item?.tipoDesconto ?? "");
-  const preview = calculate(amount, discountType, discount);
+  // Mesmo texto que o campo mostra, para a prévia ler os dois do mesmo jeito.
+  const [amount, setAmount] = useState(formatDecimal(item?.valor));
+  const [discount, setDiscount] = useState(formatDecimal(item?.desconto, 0));
+  const [discountType, setDiscountType] = useState<AdjustmentType>(
+    item?.tipoDesconto ?? "",
+  );
+  const [commission, setCommission] = useState(formatDecimal(item?.comissao, 0));
+  const [commissionType, setCommissionType] = useState<AdjustmentType>(
+    item?.tipoComissao ?? "",
+  );
+  const finalAmount = calculate(amount, discountType, discount);
+  const commissionAmount = calculateCommission(finalAmount, commissionType, commission);
 
   return (
     <Modal
@@ -761,13 +831,10 @@ function OperationModal({
           defaultValue={item?.moeda ?? ""}
           options={CURRENCIES.map((code) => ({ value: code, label: code }))}
         />
-        <Input
+        <DecimalInput
           name="valor"
           label="Valor"
-          type="number"
-          min="0"
-          step="0.01"
-          defaultValue={item?.valor ?? ""}
+          defaultValue={item?.valor}
           onChange={(event) => setAmount(event.target.value)}
         />
         <Select
@@ -775,22 +842,53 @@ function OperationModal({
           label="Tipo de desconto"
           placeholder="Sem desconto"
           value={discountType}
-          onChange={(event) => setDiscountType(event.target.value as never)}
+          onChange={(event) => setDiscountType(event.target.value as AdjustmentType)}
           options={[
             { value: "VALOR_FIXO", label: "Valor fixo" },
             { value: "PERCENTUAL", label: "Percentual" },
           ]}
         />
-        <Input
+        <DecimalInput
           name="desconto"
           label="Desconto"
-          type="number"
-          min="0"
-          step="0.0001"
-          defaultValue={item?.desconto ?? ""}
+          minFraction={0}
+          defaultValue={item?.desconto}
           onChange={(event) => setDiscount(event.target.value)}
-          hint={preview !== null ? `Valor final: ${preview}` : undefined}
+          hint={
+            finalAmount !== null
+              ? `Valor final: ${formatDecimal(String(finalAmount))}`
+              : undefined
+          }
         />
+        {kind === "aquisicao" && (
+          <>
+            <Select
+              name="tipoComissao"
+              label="Tipo de comissão"
+              placeholder="Sem comissão"
+              value={commissionType}
+              onChange={(event) =>
+                setCommissionType(event.target.value as AdjustmentType)
+              }
+              options={[
+                { value: "VALOR_FIXO", label: "Valor fixo" },
+                { value: "PERCENTUAL", label: "Percentual" },
+              ]}
+            />
+            <DecimalInput
+              name="comissao"
+              label="Comissão"
+              minFraction={0}
+              defaultValue={item?.comissao}
+              onChange={(event) => setCommission(event.target.value)}
+              hint={
+                commissionAmount !== null
+                  ? `Valor da comissão: ${formatDecimal(String(commissionAmount))} (sobre o valor final)`
+                  : "Calculada sobre o valor final."
+              }
+            />
+          </>
+        )}
       </form>
     </Modal>
   );

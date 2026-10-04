@@ -84,6 +84,8 @@ export interface LocationNode {
   projetoId: string;
   nome: string;
   paiId: string | null;
+  /** Obras e movimentações vinculadas; só exclui com zero e sem filhos. */
+  vinculos: number;
   filhos: LocationNode[];
 }
 
@@ -195,7 +197,35 @@ export interface MuseumResearch {
 export type Currency = "BRL" | "USD" | "EUR" | "GBP";
 export interface NamedReference { id: string; nome: string; }
 export interface FinancialDocument { id: string; imagemUrl: string | null; numero?: string | null; data: string | null; moeda: Currency | null; valor: string | null; comentarios: string | null; }
-export interface FinancialOperation { id: string; formaNegociacao: NamedReference | null; formaNegociacaoId: string | null; data: string | null; adquiridoDe?: string | null; vendidoPara?: string | null; moeda: Currency | null; valor: string | null; tipoDesconto: "VALOR_FIXO" | "PERCENTUAL" | null; desconto: string | null; valorFinal: string | null; notasFiscais?: FinancialDocument[]; comprovantes: FinancialDocument[]; }
+export interface FinancialOperation { id: string; formaNegociacao: NamedReference | null; formaNegociacaoId: string | null; data: string | null; adquiridoDe?: string | null; vendidoPara?: string | null; moeda: Currency | null; valor: string | null; tipoDesconto: "VALOR_FIXO" | "PERCENTUAL" | null; desconto: string | null; valorFinal: string | null; tipoComissao?: "VALOR_FIXO" | "PERCENTUAL" | null; comissao?: string | null; valorComissao?: string | null; notasFiscais?: FinancialDocument[]; comprovantes: FinancialDocument[]; }
 export interface FinancialEvaluation { id: string; data: string | null; moeda: Currency | null; valor: string | null; avaliador: string | null; comentarios: string | null; }
 export interface WorkInsurance { id: string; vigencia: string | null; moeda: Currency | null; valor: string | null; modalidadeSeguroId: string | null; modalidadeSeguro: NamedReference | null; observacoes: string | null; }
 export interface WorkFinancial { aquisicao: FinancialOperation | null; venda: FinancialOperation | null; avaliacoes: FinancialEvaluation[]; seguros: WorkInsurance[]; }
+
+export type SearchFieldType = "texto" | "numero" | "valor" | "data" | "opcao" | "multipla" | "existe";
+export type SearchCombination = "TODAS" | "QUALQUER";
+/** Campo do catálogo da busca avançada (`GET .../busca-avancada/campos`). */
+export interface SearchFieldDef {
+  id: string;
+  label: string;
+  grupo: string;
+  tipo: SearchFieldType;
+  operadores: string[];
+  opcoes?: { value: string; label: string }[];
+}
+/** Condição no formato da API: números como "1000.50", datas como "2024-01-31". */
+export interface SearchCondition { campo: string; operador: string; valor?: string | string[]; }
+export interface AdvancedFilter { combinar: SearchCombination; condicoes: SearchCondition[]; }
+export interface SavedSearchFilter extends AdvancedFilter { id: string; nome: string; criadoEm: string; atualizadoEm: string; }
+/** Campo da edição em massa (`GET .../edicao-em-massa/campos`). */
+export interface BulkEditField {
+  id: string;
+  label: string;
+  grupo: string;
+  tipo: "texto" | "inteiro" | "opcao" | "lista";
+  opcoes?: { value: string; label: string }[];
+}
+export interface BulkEditResult { atualizadas: number; ignoradas: number; movimentacoes: number; }
+/** Campo exportável (`GET .../exportacao/campos`). */
+export interface ExportField { id: string; label: string; grupo: string; }
+export interface ExportFieldsResponse { campos: ExportField[]; }

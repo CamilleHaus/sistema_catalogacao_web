@@ -6,11 +6,11 @@ import { useAuthStore } from "@/stores/auth-store";
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
 let refreshPromise: Promise<string | null> | null = null;
 
-async function request<T>(
-  path: string,
-  init: RequestInit,
-  allowRefresh: boolean,
-) {
+/**
+ * Envia a requisição com o token e, num 401, renova a sessão uma vez e tenta
+ * de novo. Erros viram ApiError; a resposta OK volta crua para quem chamou.
+ */
+async function send(path: string, init: RequestInit, allowRefresh: boolean): Promise<Response> {
   if (!API_URL) throw new Error("NEXT_PUBLIC_API_URL não foi configurada.");
 
   const token = useAuthStore.getState().accessToken;
@@ -38,7 +38,7 @@ async function request<T>(
       refreshPromise = null;
     });
 
-    if (nextToken) return request<T>(path, init, false);
+    if (nextToken) return send(path, init, false);
   }
 
   if (!response.ok) {
@@ -52,7 +52,11 @@ async function request<T>(
     }
     throw error;
   }
+  return response;
+}
 
+async function request<T>(path: string, init: RequestInit) {
+  const response = await send(path, init, true);
   if (response.status === 204) return undefined as T;
   const body = await response.text();
   if (!body.trim()) return undefined as T;
@@ -60,7 +64,26 @@ async function request<T>(
 }
 
 export function apiFetch<T>(path: string, init: RequestInit = {}) {
-  return request<T>(path, init, true);
+  return request<T>(path, init);
+}
+
+/**
+ * Pede um arquivo à API (ex.: exportação) e dispara o download no navegador,
+ * com o nome que a API mandou em Content-Disposition.
+ */
+export async function apiDownload(path: string, init: RequestInit, fallbackName: string) {
+  const response = await send(path, init, true);
+  const disposition = response.headers.get("Content-Disposition") ?? "";
+  const filename = /filename="?([^";]+)"?/.exec(disposition)?.[1] ?? fallbackName;
+  const url = URL.createObjectURL(await response.blob());
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  // Dá tempo do navegador começar o download antes de liberar a memória.
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 export type UploadedFile = {

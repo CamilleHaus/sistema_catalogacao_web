@@ -82,6 +82,11 @@ type Editing =
   | { kind: "anexo"; id: string | null }
   | null;
 
+// Mídias da mais antiga para a mais recente: a ordem em que foram enviadas.
+function byCreatedAsc(a: { criadoEm: string }, b: { criadoEm: string }) {
+  return Date.parse(a.criadoEm) - Date.parse(b.criadoEm);
+}
+
 function optional(form: FormData, key: string) {
   const value = form.get(key);
   return typeof value === "string" && value.trim() ? value.trim() : null;
@@ -116,7 +121,7 @@ export function WorkMedia({
         apiFetch<WorkAttachment[]>(`${base}/anexos`),
       ]).then(([galleryData, attachmentData]) => {
         setGallery(galleryData);
-        setAttachments(attachmentData);
+        setAttachments([...attachmentData].sort(byCreatedAsc));
       }),
     [base],
   );
@@ -146,7 +151,7 @@ export function WorkMedia({
           atualizadoEm: item.criadoEm,
           origem: "ASSINATURA" as const,
         })) ?? []),
-      ].sort((a, b) => Date.parse(b.criadoEm) - Date.parse(a.criadoEm)),
+      ].sort(byCreatedAsc),
     [gallery],
   );
 
